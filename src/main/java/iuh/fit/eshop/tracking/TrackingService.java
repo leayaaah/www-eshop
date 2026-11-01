@@ -7,6 +7,7 @@ import iuh.fit.eshop.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -94,9 +95,27 @@ public class TrackingService {
             event.setOccurredAt(data.occurredAt());
             event.setCreatedAt(LocalDateTime.now());
             events.save(event);
+        } catch (DataIntegrityViolationException ex) {
+            if (isDuplicateEventId(ex)) {
+                log.debug("Tracking event {} was already persisted", data.eventId());
+                return;
+            }
+            log.warn("Unable to persist tracking event {} for product {}", data.type(), data.productId(), ex);
         } catch (RuntimeException ex) {
             log.warn("Unable to persist tracking event {} for product {}", data.type(), data.productId(), ex);
         }
+    }
+
+    private boolean isDuplicateEventId(DataIntegrityViolationException exception) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause.getMessage() != null
+                    && cause.getMessage().contains("ux_user_event_event_id")) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     private String authenticationName(HttpServletRequest request) {

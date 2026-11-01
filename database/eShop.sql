@@ -269,6 +269,32 @@ CREATE TABLE order_detail
     CONSTRAINT ck_od_quantity CHECK (quantity > 0)
 ) ENGINE = InnoDB;
 
+CREATE TABLE user_event
+(
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    session_id      VARCHAR(64) NULL,
+    event_id        VARCHAR(64) NOT NULL UNIQUE,
+    anonymous_id    VARCHAR(64) NULL,
+    username        VARCHAR(50) NULL,
+    user_id         BIGINT NULL,
+    event_type      VARCHAR(40) NOT NULL,
+    product_id      BIGINT NULL,
+    page            VARCHAR(200),
+    value_ms        INT NULL,
+    source          VARCHAR(20) NOT NULL DEFAULT 'server',
+    consent_state   VARCHAR(30) NOT NULL DEFAULT 'server',
+    schema_version  VARCHAR(20) NOT NULL DEFAULT '1.0',
+    context_json    TEXT NULL,
+    occurred_at     DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at_v2   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_event_user (username, created_at),
+    INDEX idx_ue_user_time (user_id, created_at_v2),
+    INDEX idx_ue_session_time (session_id, created_at_v2),
+    INDEX idx_ue_product_type (product_id, event_type),
+    INDEX idx_user_event_source (source, event_type, created_at_v2)
+) ENGINE = InnoDB;
+
 -- ---------------------------------------------------------------------
 -- KIỂM TRA
 -- ---------------------------------------------------------------------

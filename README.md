@@ -8,15 +8,17 @@ Java 17, Spring Boot 3.4.1, Maven, Spring MVC, Thymeleaf, Spring Data JPA, Maria
 
 1. Mở `database/eShop.sql` và chạy trong MariaDB/HeidiSQL. **Script có `DROP DATABASE IF EXISTS eshop` nên sẽ xoá
    database `eshop` cũ trước khi tạo lại.**
-2. Mở `src/main/resources/application.properties`, chỉnh `spring.datasource.username` và `spring.datasource.password`
+2. Với database đã tồn tại, chạy lần lượt `database/migration_user_event.sql`,
+   `database/migration_user_event_v2.sql` và `database/migration_tracking_contract.sql`.
+3. Mở `src/main/resources/application.properties`, chỉnh `spring.datasource.username` và `spring.datasource.password`
    theo MariaDB của bạn.
-3. Cài đặt API key Google Gemini: tạo biến môi trường `GEMINI_API_KEY`.
+4. Cài đặt API key Google Gemini: tạo biến môi trường `GEMINI_API_KEY`.
    - PowerShell (tạm thời): `$env:GEMINI_API_KEY="your_api_key_here"`
    - PowerShell (vĩnh viễn): `[System.Environment]::SetEnvironmentVariable("GEMINI_API_KEY", "your_api_key_here", "User")`
    - Xem thêm trong `.env.example`.
-4. Mở thư mục project bằng IntelliJ IDEA, chọn JDK 17 và Load Maven Changes.
-5. Chạy `iuh.fit.eshop.EshopApplication`.
-6. Truy cập `http://localhost:8080`.
+5. Mở thư mục project bằng IntelliJ IDEA, chọn JDK 17 và Load Maven Changes.
+6. Chạy `iuh.fit.eshop.EshopApplication`.
+7. Truy cập `http://localhost:8080`.
 
 ## Spring AI (Google Gemini)
 
