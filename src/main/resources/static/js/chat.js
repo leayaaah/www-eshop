@@ -15,16 +15,27 @@
     user.textContent = 'Bạn: ' + message;
     messages.appendChild(user);
     input.value = '';
+    var status = document.createElement('p');
+    status.className = 'chat-status';
+    status.textContent = 'IUH eShop đang trả lời...';
+    messages.appendChild(status);
     try {
+      var conversationId = sessionStorage.getItem('eshop-chat-conversation');
+      if (!conversationId) {
+        conversationId = crypto.randomUUID ? crypto.randomUUID() : String(Date.now());
+        sessionStorage.setItem('eshop-chat-conversation', conversationId);
+      }
       var response = await fetch('/api/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: message })
+        body: JSON.stringify({ message: message, conversationId: conversationId })
       });
       var data = await response.json();
+      status.remove();
       var reply = document.createElement('p');
       reply.textContent = 'IUH eShop: ' + (data.answer || data.error || 'Xin lỗi, có lỗi xảy ra.');
       messages.appendChild(reply);
     } catch (error) {
+      status.remove();
       var failure = document.createElement('p');
       failure.textContent = 'IUH eShop: Không thể kết nối chatbot.';
       messages.appendChild(failure);
