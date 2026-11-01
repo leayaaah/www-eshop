@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -16,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequestMapping("/api/chat")
+@ConditionalOnProperty(name = "app.chat.enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class ChatApiController {
     private final ChatbotService chatbot;
