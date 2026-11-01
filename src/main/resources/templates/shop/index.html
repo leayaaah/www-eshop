@@ -58,9 +58,18 @@
   <main>
    <div class="alert" th:if="${error}" th:text="${error}">
    </div>
-   <h1>
-    Cửa hàng
-   </h1>
+   <section class="hero">
+    <div>
+     <span class="category-badge">IUH TECHNOLOGY STORE</span>
+     <h1>Thiết bị công nghệ cho hành trình học tập</h1>
+     <p>Chọn đúng công cụ, học tập hiệu quả hơn. Khám phá sản phẩm chính hãng với thông tin rõ ràng và giao dịch an tâm.</p>
+     <a class="button" th:href="@{/#catalog}">Khám phá sản phẩm</a>
+    </div>
+    <div aria-hidden="true" class="hero-aside">TECH</div>
+   </section>
+   <div id="catalog">
+    <h2>Cửa hàng</h2>
+   </div>
    <div th:replace="~{fragments/recommend :: products('Gợi ý cho bạn', ${recommended})}"></div>
    <form class="filters" method="get" th:action="@{/}">
     <input name="keyword" placeholder="Tìm tên sản phẩm" th:value="${keyword}"/>
@@ -79,16 +88,13 @@
     <article class="card" th:each="p:${products.content}">
      <a th:href="@{/products/{id}(id=${p.id})}" th:attr="data-product-id=${p.id}">
       <img alt="product" th:src="${p.imageUrl} ?: 'https://placehold.co/400x300?text=eShop'"/>
+      <span class="category-badge" th:if="${p.category != null}" th:text="${p.category.name}"></span>
       <h3 th:text="${p.name}">
       </h3>
      </a>
      <p class="price" th:text="${#numbers.formatDecimal(p.price,0,'COMMA',0,'POINT')} + ' ₫'">
      </p>
-     <p>
-      Tồn kho:
-      <span th:text="${p.quantity}">
-      </span>
-     </p>
+     <p><span class="stock-badge" th:classappend="${p.quantity < 10} ? ' low' : ''" th:text="${p.quantity > 0 ? 'Còn hàng · ' + p.quantity : 'Hết hàng'}"></span></p>
      <form method="post" sec:authorize="hasAuthority('ROLE_CUSTOMER')" th:action="@{/cart/add/{id}(id=${p.id})}">
       <input min="1" name="quantity" th:max="${p.quantity}" type="number" value="1"/>
       <button th:disabled="${p.quantity == 0}">
