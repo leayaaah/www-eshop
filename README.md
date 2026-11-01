@@ -20,7 +20,7 @@ Java 17, Spring Boot 3.4.1, Maven, Spring MVC, Thymeleaf, Spring Data JPA, Maria
 
 ## Spring AI (Google Gemini)
 
-- Chat model: `gemini-2.5-flash`
+- Chat model: `gemini-3.8-flash` (có thể ghi đè bằng `GEMINI_CHAT_MODEL`)
 - Embedding model: `text-embedding-004` (768 chiều)
 - Vector Store: MariaDB (cần MariaDB ≥ 11.7 cho tính năng vector; fallback là `SimpleVectorStore` file nếu MariaDB cũ)
 - Bật/tắt AI: `app.ai.enabled=true` (mặc định). Nếu thiếu `GEMINI_API_KEY` hoặc MariaDB không hỗ trợ vector, ứng dụng vẫn chạy, các endpoint AI trả 503.
