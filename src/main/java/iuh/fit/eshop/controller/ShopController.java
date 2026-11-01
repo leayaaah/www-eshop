@@ -15,7 +15,8 @@ public class ShopController  {
     private final RecommendationService recommendations;
     private final iuh.fit.eshop.tracking.TrackingService tracking;
 @GetMapping("/")
-public String index(@RequestParam(required=false) String keyword,@RequestParam(required=false) Long categoryId,@RequestParam(defaultValue="0") int page,Model model) {
+public String index(@RequestParam(required=false) String keyword,@RequestParam(required=false) Long categoryId,
+                    @RequestParam(defaultValue="0") int page, Model model, HttpServletRequest request) {
         var result=products.search(keyword,categoryId,page,12);
         model.addAttribute("products",result);
         model.addAttribute("keyword",keyword);
@@ -24,8 +25,10 @@ public String index(@RequestParam(required=false) String keyword,@RequestParam(r
         if (keyword == null && categoryId == null) {
             var auth = SecurityContextHolder.getContext().getAuthentication();
             var username = auth == null || !auth.isAuthenticated() ? null : auth.getName();
-            model.addAttribute("recommended", recommendations.recommend(username, 8));
+            String sessionId = username == null ? request.getSession(true).getId() : null;
+            model.addAttribute("recommended", recommendations.recommend(username, sessionId, 8));
         }
+
         return "shop/index";
     }
 @GetMapping("/products/{id}")

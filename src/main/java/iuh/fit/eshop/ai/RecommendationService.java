@@ -12,8 +12,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -22,38 +20,42 @@ public class RecommendationService {
     private final ProductRepository products;
     private final OrderRepository orders;
     private final ObjectProvider<Cart> cartProvider;
+    private final ProductVectorSearchService vectorSearch;
 
     public List<Product> recommend(String username, int limit) {
-        List<Product> all = products.findAllWithCategory();
-        Set<Long> excluded = excludedProducts(username);
-        Map<Long, Double> scores = scoreEvents(username);
-        Set<Long> interests = scores.entrySet().stream()
-                .sorted(Map.Entry.<Long, Double>comparingByValue().reversed())
-                .limit(10).map(Map.Entry::getKey).collect(Collectors.toSet());
-
-        List<Product> ranked = all.stream()
-                .filter(p -> p.getQuantity() > 0 && !excluded.contains(p.getId()))
-                .sorted(Comparator
-                        .comparingDouble((Product p) -> relatedScore(p, all, interests, scores)).reversed()
-                        .thenComparing(Product::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                .toList();
-        return diversify(ranked, limit);
+        return recommend(username, null, limit);
     }
 
-    public List<Product> similar(Product product, int limit) {
-        List<Product> candidates = products.findAllWithCategory().stream()
-                .filter(p -> !Objects.equals(p.getId(), product.getId()) && p.getQuantity() > 0)
-                .sorted(Comparator.comparing((Product p) ->
-                        Objects.equals(p.getCategory().getId(), product.getCategory().getId()) ? 0 : 1)
+    public List<Product> recommend(String username, String sessionId, int limit) {
+        Map<Long, Double> scores = scoreEvents(username, sessionId);
+        Set<Long> excluded = excludedProducts(username);
+        List<Product> all = products.findAllWithCategory();
+        String query = interestQuery(scores, all);
+        List<Product> candidates = vectorSearch.search(query, 40);
+        if (candidates.isEmpty()) candidates = all;
+        candidates = candidates.stream()
+                .filter(p -> p.getQuantity() != null && p.getQuantity() > 0)
+                .filter(p -> !excluded.contains(p.getId()))
+                .sorted(Comparator.comparingDouble((Product p) -> scores.getOrDefault(p.getId(), 0d)).reversed()
                         .thenComparing(Product::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
                 .toList();
         return diversify(candidates, limit);
     }
 
-    private Map<Long, Double> scoreEvents(String username) {
-        List<UserEvent> recent = username == null
-                ? List.of()
-                : events.findByUsernameAndCreatedAtAfter(username, LocalDateTime.now().minusDays(90));
+    public List<Product> similar(Product product, int limit) {
+        List<Product> candidates = vectorSearch.similar(
+                product.getName() + ". " + (product.getDescription() == null ? "" : product.getDescription()), 30);
+        if (candidates.isEmpty()) candidates = products.findAllWithCategory();
+        return diversify(candidates.stream()
+                .filter(p -> !Objects.equals(p.getId(), product.getId()) && p.getQuantity() > 0)
+                .toList(), limit);
+    }
+
+    private Map<Long, Double> scoreEvents(String username, String sessionId) {
+        List<UserEvent> recent = username != null
+                ? events.findByUsernameAndCreatedAtAfter(username, LocalDateTime.now().minusDays(90))
+                : sessionId == null ? List.of()
+                : events.findBySessionIdAndCreatedAtAfter(sessionId, LocalDateTime.now().minusDays(90));
         Map<Long, Double> scores = new HashMap<>();
         for (UserEvent event : recent) {
             if (event.getProductId() == null) continue;
@@ -72,6 +74,18 @@ public class RecommendationService {
         return scores;
     }
 
+    private String interestQuery(Map<Long, Double> scores, List<Product> all) {
+        if (scores.isEmpty()) return "sản phẩm phổ biến trong cửa hàng";
+        return scores.entrySet().stream().sorted(Map.Entry.<Long, Double>comparingByValue().reversed())
+                .limit(10).map(Map.Entry::getKey)
+                .map(id -> all.stream().filter(p -> id.equals(p.getId())).findFirst()
+                        .map(p -> p.getName() + " " + (p.getDescription() == null ? "" : p.getDescription()))
+                        .orElse(""))
+                .filter(s -> !s.isBlank())
+                .reduce((a, b) -> a + ", " + b)
+                .orElse("sản phẩm phổ biến");
+    }
+
     private double dwellWeight(Integer valueMs) {
         if (valueMs == null) return 0;
         if (valueMs >= 60_000) return 3;
@@ -79,34 +93,26 @@ public class RecommendationService {
         return valueMs >= 10_000 ? 1 : 0;
     }
 
-    private double relatedScore(Product product, List<Product> all, Set<Long> interests, Map<Long, Double> scores) {
-        if (scores.containsKey(product.getId())) return 0;
-        return all.stream().filter(p -> interests.contains(p.getId())
-                        && Objects.equals(p.getCategory().getId(), product.getCategory().getId()))
-                .mapToDouble(p -> scores.getOrDefault(p.getId(), 0d)).sum();
-    }
-
     private Set<Long> excludedProducts(String username) {
         Set<Long> excluded = new HashSet<>();
-        if (username != null) {
-            orders.findForUserByUsername(username).stream()
-                    .flatMap(o -> o.getDetails().stream())
-                    .map(d -> d.getProduct().getId()).forEach(excluded::add);
-        }
+        if (username != null) orders.findForUserByUsername(username).stream()
+                .flatMap(o -> o.getDetails().stream()).map(d -> d.getProduct().getId()).forEach(excluded::add);
         Cart cart = cartProvider.getIfAvailable();
         if (cart != null) excluded.addAll(cart.getItems().keySet());
         return excluded;
     }
 
-    private List<Product> diversify(List<Product> products, int limit) {
+    private List<Product> diversify(List<Product> source, int limit) {
+        int max = Math.max(1, Math.min(limit, 20));
         Map<Long, Integer> counts = new HashMap<>();
         List<Product> result = new ArrayList<>();
-        for (Product product : products) {
+        for (Product product : source) {
+            if (product.getCategory() == null) continue;
             long categoryId = product.getCategory().getId();
             if (counts.getOrDefault(categoryId, 0) >= 3) continue;
             result.add(product);
             counts.merge(categoryId, 1, Integer::sum);
-            if (result.size() >= Math.max(1, Math.min(limit, 20))) break;
+            if (result.size() >= max) break;
         }
         return result;
     }
