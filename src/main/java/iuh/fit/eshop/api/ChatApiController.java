@@ -7,8 +7,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
+import org.springframework.http.codec.ServerSentEvent;
 
 import java.time.Instant;
 import java.util.Map;
@@ -42,7 +45,11 @@ public class ChatApiController {
             history.addLast(now);
         }
         try {
-            return ResponseEntity.ok(new ChatResponse(chatbot.chat(req.message().trim(), conversation)));
+            Flux<ServerSentEvent<String>> stream = chatbot.stream(req.message().trim(), conversation)
+                    .map(chunk -> ServerSentEvent.builder(chunk).build());
+            return ResponseEntity.ok()
+                    .contentType(MediaType.TEXT_EVENT_STREAM)
+                    .body(stream);
         } catch (RuntimeException ex) {
             return ResponseEntity.internalServerError().body(Map.of("error", "Xin lỗi, chatbot hiện không khả dụng."));
         }

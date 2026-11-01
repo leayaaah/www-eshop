@@ -12,6 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
@@ -19,21 +22,29 @@ import java.util.Objects;
 public class ProductVectorSearchService {
     private final ObjectProvider<VectorStore> vectorStores;
     private final ProductService products;
+    @Value("${app.ai.vector-search-timeout-ms:8000}")
+    private long timeoutMillis;
 
     public List<Product> search(String query, int limit) {
+        long startedAt = System.nanoTime();
         VectorStore store = vectorStores.getIfAvailable();
         if (query == null || query.isBlank()) return List.of();
         if (store == null) {
-            return products.search(query, null, 0, limit).getContent();
+            List<Product> result = products.search(query, null, 0, limit).getContent();
+            log.info("Product search stage=sql durationMs={} resultCount={}", elapsedMs(startedAt), result.size());
+            return result;
         }
         List<Product> result;
         try {
-            result = store.similaritySearch(SearchRequest.builder()
-                            .query(query.trim())
-                            .topK(Math.max(1, Math.min(limit, 50)))
-                            .similarityThreshold(0.3)
-                            .filterExpression("source == 'product'")
-                            .build())
+            long vectorStartedAt = System.nanoTime();
+            result = CompletableFuture.supplyAsync(() -> store.similaritySearch(SearchRequest.builder()
+                                    .query(query.trim())
+                                    .topK(Math.max(1, Math.min(limit, 8)))
+                                    .similarityThreshold(0.3)
+                                    .filterExpression("source == 'product'")
+                                    .build()))
+                    .orTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
+                    .join()
                     .stream()
                     .map(this::productId)
                     .filter(Objects::nonNull)
@@ -41,11 +52,25 @@ public class ProductVectorSearchService {
                     .map(this::safeFind)
                     .filter(Objects::nonNull)
                     .toList();
+            log.info("Product search stage=vector-store durationMs={} resultCount={}",
+                    elapsedMs(vectorStartedAt), result.size());
         } catch (RuntimeException ex) {
-            log.warn("Vector product search failed; using SQL fallback: {}", ex.getMessage());
-            return products.search(query, null, 0, limit).getContent();
+            log.warn("Product search stage=vector-store failed durationMs={} reason={}",
+                    elapsedMs(startedAt), ex.getMessage());
+            List<Product> fallback = products.search(query, null, 0, limit).getContent();
+            log.info("Product search stage=sql-fallback durationMs={} resultCount={}",
+                    elapsedMs(startedAt), fallback.size());
+            return fallback;
         }
-        return result.isEmpty() ? products.search(query, null, 0, limit).getContent() : result;
+        if (result.isEmpty()) {
+            List<Product> fallback = products.search(query, null, 0, limit).getContent();
+            log.info("Product search stage=sql-empty-vector-fallback durationMs={} resultCount={}",
+                    elapsedMs(startedAt), fallback.size());
+            return fallback;
+        }
+        log.info("Product search stage=complete durationMs={} resultCount={}",
+                elapsedMs(startedAt), result.size());
+        return result;
     }
 
     public List<Product> similar(String description, int limit) {
@@ -63,5 +88,9 @@ public class ProductVectorSearchService {
         } catch (RuntimeException ignored) {
             return null;
         }
+    }
+
+    private long elapsedMs(long startedAt) {
+        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
     }
 }

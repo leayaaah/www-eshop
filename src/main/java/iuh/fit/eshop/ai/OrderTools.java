@@ -17,6 +17,7 @@ public class OrderTools {
 
     @Tool(description = "Liệt kê các đơn hàng của khách đang đăng nhập")
     public Object getMyRecentOrders() {
+        ToolCallBudget.consume("getMyRecentOrders");
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) return "Bạn cần đăng nhập.";
         return orderService.mine(authentication.getName()).stream()

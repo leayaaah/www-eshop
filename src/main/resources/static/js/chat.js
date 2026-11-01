@@ -63,12 +63,36 @@
         body: JSON.stringify({ message: message, conversationId: conversationId }),
         signal: controller.signal
       });
-      var data = await response.json();
-      if (!response.ok && !data.error) {
-        data.error = 'Chatbot không thể xử lý yêu cầu lúc này.';
+      if (!response.ok) {
+        var data = await response.json();
+        throw new Error(data.error || 'Chatbot không thể xử lý yêu cầu lúc này.');
       }
-      status.remove();
-      appendMessage('bot', data.answer || data.error || 'Xin lỗi, có lỗi xảy ra.');
+      var bubble = status.querySelector('.chat-bubble');
+      bubble.textContent = '';
+      var reader = response.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+      while (true) {
+        var part = await reader.read();
+        if (part.done) break;
+        buffer += decoder.decode(part.value, { stream: true });
+        var events = buffer.split('\n\n');
+        buffer = events.pop();
+        events.forEach(function (event) {
+          event.split('\n')
+            .filter(function (line) { return line.indexOf('data:') === 0; })
+            .forEach(function (line) {
+              bubble.textContent += line.substring(5).trimStart();
+              messages.scrollTop = messages.scrollHeight;
+            });
+        });
+      }
+      buffer.split('\n')
+        .filter(function (line) { return line.indexOf('data:') === 0; })
+        .forEach(function (line) {
+          bubble.textContent += line.substring(5).trimStart();
+        });
+      status.classList.remove('chat-message-loading');
     } catch (error) {
       status.remove();
       appendMessage('bot', error.name === 'AbortError'
