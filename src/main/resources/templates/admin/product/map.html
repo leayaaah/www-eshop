@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:sec="http://www.thymeleaf.org/extras/spring-security" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1" name="viewport"/>
+    <title>Bản đồ sản phẩm - eShop</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}"/>
+</head>
+<body>
+<header>
+    <a class="brand" th:href="@{/}">IUH eShop</a>
+    <nav>
+        <a th:href="@{/}">Cửa hàng</a>
+        <a th:href="@{/admin/products}">Sản phẩm</a>
+        <a th:href="@{/admin/categories}">Danh mục</a>
+        <form class="inline" method="post" th:action="@{/logout}">
+            <button>Đăng xuất</button>
+        </form>
+    </nav>
+</header>
+<main>
+    <div class="page-heading">
+        <h1>Bản đồ sản phẩm 2D</h1>
+        <p>Khoảng cách chỉ mang tính tham khảo vì là bản chiếu từ nhiều chiều xuống 2 chiều.</p>
+    </div>
+    <div class="map-toolbar">
+        <a class="button secondary" th:href="@{/admin/products}">← Danh sách sản phẩm</a>
+        <label class="map-search">Tìm sản phẩm
+            <input id="product-map-search" type="search" placeholder="Nhập tên sản phẩm"/>
+        </label>
+    </div>
+    <div class="map-summary" id="product-map-summary">Đang tải dữ liệu…</div>
+    <div class="product-map-layout">
+        <section class="product-map-card">
+            <div class="product-map-legend" id="product-map-legend"></div>
+            <div class="product-map-scroller">
+                <svg id="product-map" class="product-map" viewBox="0 0 1000 680" role="img"
+                     aria-label="Bản đồ sản phẩm theo độ giống"></svg>
+            </div>
+        </section>
+        <aside class="product-map-details" id="product-map-details">
+            <h2>Chi tiết sản phẩm</h2>
+            <p>Chọn một điểm trên bản đồ để xem các sản phẩm gần nhất.</p>
+        </aside>
+    </div>
+</main>
+<footer>IUH eShop · Spring Boot · MariaDB</footer>
+<script th:src="@{/js/product-map.js}"></script>
+</body>
+</html>

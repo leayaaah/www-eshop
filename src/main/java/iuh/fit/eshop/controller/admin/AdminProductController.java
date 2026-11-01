@@ -25,6 +25,10 @@ public String create(Model m) {
         m.addAttribute("categories",categories.findAll());
         return "admin/product/form";
     }
+    @GetMapping("/map")
+    public String map() {
+            return "admin/product/map";
+        }
 @GetMapping("/{id}/edit")
 public String edit(@PathVariable Long id,Model m) {
         m.addAttribute("product",products.findById(id));

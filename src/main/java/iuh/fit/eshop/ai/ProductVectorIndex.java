@@ -61,12 +61,23 @@ public class ProductVectorIndex {
                 vectors.size(), vectors.isEmpty() ? "unavailable" : "memory");
     }
 
+    public synchronized void reload() {
+        vectors.clear();
+        load();
+    }
+
     public boolean available() {
         return !vectors.isEmpty();
     }
 
     public float[] vector(Long productId) {
         return vectors.get(productId);
+    }
+
+    public Map<Long, float[]> snapshot() {
+        Map<Long, float[]> copy = new LinkedHashMap<>();
+        vectors.forEach((id, vector) -> copy.put(id, vector.clone()));
+        return Collections.unmodifiableMap(copy);
     }
 
     public double cosine(float[] left, float[] right) {
@@ -97,7 +108,7 @@ public class ProductVectorIndex {
 
     private void loadFromMariaDb() {
         jdbc.query("select metadata, embedding from vector_store " +
-                        "where metadata like '%\"source\":\"product\"%' limit 50",
+                        "where metadata like '%\"source\":\"product\"%'",
                 resultSet -> {
             try {
                 Map<?, ?> metadata = objectMapper.readValue(
