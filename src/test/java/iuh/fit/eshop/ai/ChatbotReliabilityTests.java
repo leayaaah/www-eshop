@@ -138,6 +138,28 @@ class ChatbotReliabilityTests {
         verifyNoInteractions(client);
     }
 
+    @Test
+    void policyQuestionIsNotAnsweredByProductQuickSearch() {
+        ChatClient client = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec request = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec response = mock(ChatClient.CallResponseSpec.class);
+        when(client.prompt()).thenReturn(request);
+        when(request.user(anyString())).thenReturn(request);
+        when(request.tools(any(Object[].class))).thenReturn(request);
+        when(request.advisors(any(Consumer.class))).thenReturn(request);
+        when(request.call()).thenReturn(response);
+        when(response.content()).thenReturn("Chính sách đổi trả của cửa hàng là...");
+
+        ChatbotService service = new ChatbotService(provider(client), provider(mock(ChatMemory.class)),
+                mock(ProductTools.class), mock(OrderTools.class), mock(ProductVectorSearchService.class),
+                mock(ProductService.class));
+        ReflectionTestUtils.setField(service, "chatTimeoutMillis", 25_000L);
+
+        assertEquals("Chính sách đổi trả của cửa hàng là...",
+                service.chat("Cửa hàng có chính sách đổi trả như thế nào?", "conversation-1"));
+        verify(client).prompt();
+    }
+
     private static Product product(Long id) {
         Category category = new Category();
         category.setName("Laptop");

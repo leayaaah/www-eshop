@@ -164,6 +164,7 @@ public class ChatbotService {
                 .replaceAll("[^\\p{L}\\p{N}\\s]", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
+        if (!containsProductIntent(query)) return null;
         Set<String> stopWords = Set.of("tôi", "mình", "muốn", "cần", "mua", "tìm", "cho", "xem",
                 "sản", "phẩm", "một", "vài", "loại", "có", "gì", "nào", "giúp", "với", "giá",
                 "bao", "nhiêu", "không", "xin", "hãy", "tư", "vấn", "chào", "hello", "hi");
@@ -182,10 +183,7 @@ public class ChatbotService {
                         .thenComparing(Product::getId))
                 .limit(5)
                 .toList();
-        if (products.isEmpty()) {
-            return "Mình chưa tìm thấy sản phẩm phù hợp với \"" + keyword
-                    + "\". Bạn có thể thử từ khóa khác như điện thoại, laptop hoặc tai nghe.";
-        }
+        if (products.isEmpty()) return null;
         return "Mình tìm thấy " + products.size() + " sản phẩm phù hợp: " +
                 products.stream()
                         .map(p -> p.getName() + " - " + p.getPrice() + " đồng (/products/" + p.getId() + ")")
