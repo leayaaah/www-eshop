@@ -5,8 +5,8 @@
     const legend = document.getElementById('product-map-legend');
     const summary = document.getElementById('product-map-summary');
     const details = document.getElementById('product-map-details');
-    const ranking = document.getElementById('product-map-ranking');
-    const categories = document.getElementById('product-map-categories');
+    let ranking = document.getElementById('product-map-ranking');
+    let categories = document.getElementById('product-map-categories');
     const search = document.getElementById('product-map-search');
     const metric = document.getElementById('product-map-metric');
     const days = document.getElementById('product-map-days');
@@ -16,6 +16,8 @@
     let heat = new Map();
     let activeCategories = new Set();
     let explainedVariance = 0;
+    let heatData = null;
+    let selectedPointId = null;
 
     Promise.all([load('/admin/products/map/data'), loadHeat()])
         .then(([data, heatData]) => {
@@ -63,6 +65,7 @@
     }
 
     function applyHeat(data) {
+        heatData = data;
         heat = new Map((data.points || []).map(point => [point.productId, point]));
         summary.textContent = `${points.length} sản phẩm có vector · `
             + `Hai trục giải thích ${(explainedVariance * 100).toFixed(1)}% phương sai · `
@@ -93,6 +96,9 @@
 
     function render() {
         svg.replaceChildren();
+        svg.onclick = event => {
+            if (event.target === svg) clearSelection();
+        };
         const query = search.value.trim().toLocaleLowerCase();
         points.forEach((point, index) => {
             const heatPoint = heat.get(point.id) || {intensity: 0};
@@ -114,7 +120,10 @@
             circle.addEventListener('mouseleave', hideTooltip);
             circle.addEventListener('focus', event => showTooltip(event, point, heatPoint));
             circle.addEventListener('blur', hideTooltip);
-            circle.addEventListener('click', () => showDetails(point));
+            circle.addEventListener('click', event => {
+                event.stopPropagation();
+                selectedPointId === point.id ? clearSelection() : showDetails(point);
+            });
             svg.append(circle);
         });
     }
@@ -136,7 +145,13 @@
     }
 
     function showDetails(point) {
+        selectedPointId = point.id;
         details.replaceChildren();
+        const back = document.createElement('button');
+        back.className = 'button secondary map-back-button';
+        back.type = 'button';
+        back.textContent = '← Xem Top 5';
+        back.addEventListener('click', clearSelection);
         const heading = document.createElement('h2');
         heading.textContent = point.name;
         const meta = document.createElement('p');
@@ -155,7 +170,25 @@
             item.append(link, document.createTextNode(` (${(neighbor.similarity * 100).toFixed(1)}%)`));
             list.append(item);
         });
-        details.append(heading, meta, title, list);
+        details.append(back, heading, meta, title, list);
+    }
+
+    function clearSelection() {
+        selectedPointId = null;
+        details.replaceChildren();
+        const heading = document.createElement('h2');
+        heading.textContent = 'Tổng quan nhiệt';
+        const hint = document.createElement('p');
+        hint.textContent = 'Chọn một điểm để xem các sản phẩm gần nhất.';
+        ranking = document.createElement('div');
+        ranking.id = 'product-map-ranking';
+        categories = document.createElement('div');
+        categories.id = 'product-map-categories';
+        details.append(heading, hint, ranking, categories);
+        if (heatData) {
+            renderRanking(heatData);
+            renderCategories(heatData);
+        }
     }
 
     function formatPrice(price) {
@@ -183,7 +216,17 @@
                 const list = document.createElement('ol');
                 values.forEach(value => {
                     const item = document.createElement('li');
-                    item.textContent = `${value.productId} · ${metricLabel(data.metric)} ${value.raw.toFixed(2)}`;
+                    const product = points.find(point => point.id === value.productId);
+                    const link = document.createElement('a');
+                    link.href = '#';
+                    link.textContent = product ? product.name : `Sản phẩm #${value.productId}`;
+                    link.addEventListener('click', event => {
+                        event.preventDefault();
+                        const selected = points.find(point => point.id === value.productId);
+                        if (selected) showDetails(selected);
+                    });
+                    item.append(link, document.createTextNode(
+                        ` · ${metricLabel(data.metric)} ${value.raw.toFixed(2)}`));
                     list.append(item);
                 });
                 section.append(heading, list);

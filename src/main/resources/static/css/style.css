@@ -353,6 +353,7 @@ td:first-child { color: var(--text); font-weight: 500; }
 .map-note { color: var(--muted); font-size: 12px; }
 .product-map-details .ranking { margin-top: 24px; }
 .product-map-details .ranking h3 { margin-bottom: 8px; }
+.map-back-button { margin-bottom: 16px; }
 .heat-category { display: grid; gap: 4px; margin: 10px 0; color: var(--text-secondary); font-size: 12px; }
 .heat-category-bar { display: block; height: 7px; min-width: 3%; background: linear-gradient(90deg, #38bdf8, #f97316, #dc2626); border-radius: 999px; }
 
