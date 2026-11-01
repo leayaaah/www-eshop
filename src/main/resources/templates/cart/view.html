@@ -58,69 +58,60 @@
   <main>
    <div class="alert" th:if="${error}" th:text="${error}">
    </div>
-   <h1>
-    Giỏ hàng
-   </h1>
-   <p th:if="${cart.isEmpty()}">
-    Giỏ hàng đang trống.
-   </p>
-   <table th:if="${!cart.isEmpty()}">
-    <thead>
-     <tr>
-      <th>
-       Sản phẩm
-      </th>
-      <th>
-       Đơn giá
-      </th>
-      <th>
-       Số lượng
-      </th>
-      <th>
-       Tạm tính
-      </th>
-      <th>
-      </th>
-     </tr>
-    </thead>
-    <tbody>
-     <tr th:each="entry:${cart.items}">
-      <td th:text="${entry.value.product.name}">
-      </td>
-      <td th:text="${entry.value.product.price}">
-      </td>
-      <td>
-       <form class="inline" method="post" th:action="@{/cart/update/{id}(id=${entry.key})}">
-        <input min="0" name="quantity" th:value="${entry.value.quantity}" type="number"/>
-        <button>
-         Cập nhật
-        </button>
-       </form>
-      </td>
-      <td th:text="${entry.value.product.price * entry.value.quantity}">
-      </td>
-      <td>
-       <form method="post" th:action="@{/cart/remove/{id}(id=${entry.key})}">
-        <button class="danger">
-         Xoá
-        </button>
-       </form>
-      </td>
-     </tr>
-    </tbody>
-   </table>
-   <h2 th:if="${!cart.isEmpty()}">
-    Tổng:
-    <span th:text="${cart.total}">
-    </span>
-    ₫
-   </h2>
-   <a class="button" th:href="@{/checkout}" th:if="${!cart.isEmpty()}">
-    Thanh toán
-   </a>
-   <a th:href="@{/}">
-    Tiếp tục mua hàng
-   </a>
+   <div class="page-heading">
+    <div>
+     <p class="eyebrow">MUA SẮM</p>
+     <h1>Giỏ hàng</h1>
+     <p class="page-subtitle">Kiểm tra sản phẩm và số lượng trước khi thanh toán.</p>
+    </div>
+    <a class="button secondary" th:href="@{/}">Tiếp tục mua hàng</a>
+   </div>
+   <div class="empty-state" th:if="${cart.isEmpty()}">
+    <strong>Giỏ hàng đang trống.</strong>
+    <p>Hãy khám phá các sản phẩm nổi bật trong cửa hàng.</p>
+    <a class="button" th:href="@{/}">Khám phá sản phẩm</a>
+   </div>
+   <div class="cart-layout" th:if="${!cart.isEmpty()}">
+    <div class="table-card">
+     <table class="cart-table">
+      <thead>
+       <tr>
+        <th>Sản phẩm</th>
+        <th>Đơn giá</th>
+        <th>Số lượng</th>
+        <th>Tạm tính</th>
+        <th></th>
+       </tr>
+      </thead>
+      <tbody>
+       <tr th:each="entry:${cart.items}">
+        <td class="product-cell" th:text="${entry.value.product.name}"></td>
+        <td class="money" th:text="${#numbers.formatDecimal(entry.value.product.price,0,'COMMA',0,'POINT')} + ' ₫'"></td>
+        <td>
+         <form class="inline quantity-form" method="post" th:action="@{/cart/update/{id}(id=${entry.key})}">
+          <input min="0" name="quantity" th:value="${entry.value.quantity}" type="number"/>
+          <button class="button secondary">Cập nhật</button>
+         </form>
+        </td>
+        <td class="money" th:text="${#numbers.formatDecimal(entry.value.product.price * entry.value.quantity,0,'COMMA',0,'POINT')} + ' ₫'"></td>
+        <td>
+         <form method="post" th:action="@{/cart/remove/{id}(id=${entry.key})}">
+          <button class="danger">Xoá</button>
+         </form>
+        </td>
+       </tr>
+      </tbody>
+     </table>
+    </div>
+    <aside class="cart-summary">
+     <p class="eyebrow">TỔNG ĐƠN HÀNG</p>
+     <h2>
+      <span th:text="${#numbers.formatDecimal(cart.total,0,'COMMA',0,'POINT')} + ' ₫'"></span>
+     </h2>
+     <p>Đã bao gồm giá sản phẩm trong giỏ hàng.</p>
+     <a class="button checkout-button" th:href="@{/checkout}">Thanh toán</a>
+    </aside>
+   </div>
   </main>
   <footer>
    IUH eShop · Spring Boot · MariaDB

@@ -57,42 +57,45 @@
   <main>
    <div class="alert" th:if="${error}" th:text="${error}">
    </div>
-   <h1>
-    Đơn hàng của tôi
-   </h1>
-   <table>
-    <tr>
-     <th>
-      Mã đơn
-     </th>
-     <th>
-      Ngày
-     </th>
-     <th>
-      Tổng
-     </th>
-     <th>
-      Trạng thái
-     </th>
-     <th>
-     </th>
-    </tr>
-    <tr th:each="o:${orders}">
-     <td th:text="${o.id}">
-     </td>
-     <td th:text="${o.orderDate}">
-     </td>
-     <td th:text="${o.totalAmount}">
-     </td>
-     <td th:text="${o.status}">
-     </td>
-     <td>
-      <a th:href="@{/orders/{id}(id=${o.id})}">
-       Chi tiết
-      </a>
-     </td>
-    </tr>
-   </table>
+   <div class="page-heading">
+    <div>
+     <p class="eyebrow">TÀI KHOẢN</p>
+     <h1>Đơn hàng của tôi</h1>
+     <p class="page-subtitle">Theo dõi lịch sử mua hàng và trạng thái giao hàng.</p>
+    </div>
+    <a class="button secondary" th:href="@{/}">Tiếp tục mua hàng</a>
+   </div>
+   <div class="empty-state" th:if="${orders.isEmpty()}">
+    <strong>Bạn chưa có đơn hàng nào.</strong>
+    <p>Đơn hàng sau khi đặt thành công sẽ xuất hiện tại đây.</p>
+    <a class="button" th:href="@{/}">Bắt đầu mua sắm</a>
+   </div>
+   <div class="table-card" th:if="${!orders.isEmpty()}">
+    <table class="orders-table">
+     <thead>
+      <tr>
+       <th>Mã đơn</th>
+       <th>Ngày đặt</th>
+       <th>Tổng thanh toán</th>
+       <th>Trạng thái</th>
+       <th></th>
+      </tr>
+     </thead>
+     <tbody>
+      <tr th:each="o:${orders}">
+       <td class="order-id" th:text="${'#' + o.id}"></td>
+       <td class="date" th:text="${#temporals.format(o.orderDate, 'dd/MM/yyyy HH:mm')}"></td>
+       <td class="money" th:text="${#numbers.formatDecimal(o.totalAmount,0,'COMMA',0,'POINT')} + ' ₫'"></td>
+       <td>
+        <span class="status-badge" th:classappend="${' status-' + #strings.toLowerCase(o.status.name())}" th:text="${o.status}"></span>
+       </td>
+       <td class="table-action">
+        <a th:href="@{/orders/{id}(id=${o.id})}">Chi tiết →</a>
+       </td>
+      </tr>
+     </tbody>
+    </table>
+   </div>
   </main>
   <footer>
    IUH eShop · Spring Boot · MariaDB
