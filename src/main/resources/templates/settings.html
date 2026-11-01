@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Cài đặt quyền riêng tư - eShop</title>
+  <link rel="stylesheet" th:href="@{/css/style.css}"/>
+  <script th:src="@{/js/consent.js}" defer></script>
+</head>
+<body>
+<header><a class="brand" th:href="@{/}">IUH eShop</a><nav><a th:href="@{/}">Cửa hàng</a></nav></header>
+<main>
+  <div class="page-heading"><div><p class="eyebrow">CÀI ĐẶT</p><h1>Quyền riêng tư</h1></div></div>
+  <section class="settings-card">
+    <p>Bạn có thể thay đổi lựa chọn tracking bất cứ lúc nào. Lựa chọn hiện tại được lưu trên thiết bị này.</p>
+    <button class="button" type="button" onclick="window.eshopConsent.open()">Thay đổi consent</button>
+    <p class="map-note">Policy version: 2026-11-01 · Dữ liệu tracking được lưu tối đa 90 ngày.</p>
+  </section>
+</main>
+<footer>IUH eShop · Spring Boot · MariaDB</footer>
+</body>
+</html>

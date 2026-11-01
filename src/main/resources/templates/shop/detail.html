@@ -25,6 +25,7 @@
      </span>
      )
     </a>
+    <a th:href="@{/settings}">Quyền riêng tư</a>
     <a sec:authorize="hasAuthority('ROLE_CUSTOMER')" th:href="@{/orders}">
      Đơn hàng của tôi
     </a>

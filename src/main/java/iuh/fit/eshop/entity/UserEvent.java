@@ -18,6 +18,12 @@ public class UserEvent {
     @Column(name = "session_id")
     private String sessionId;
 
+    @Column(name = "event_id", unique = true)
+    private String eventId;
+
+    @Column(name = "anonymous_id")
+    private String anonymousId;
+
     private String username;
 
     @Column(name = "user_id")
@@ -33,6 +39,20 @@ public class UserEvent {
 
     @Column(name = "value_ms")
     private Integer valueMs;
+
+    private String source;
+
+    @Column(name = "consent_state")
+    private String consentState;
+
+    @Column(name = "schema_version")
+    private String schemaVersion;
+
+    @Column(name = "context_json", columnDefinition = "TEXT")
+    private String contextJson;
+
+    @Column(name = "occurred_at")
+    private LocalDateTime occurredAt;
 
     @Column(name = "created_at_v2")
     private LocalDateTime createdAt;

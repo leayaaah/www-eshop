@@ -12,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -40,25 +41,61 @@ public class TrackingService {
     }
 
     public void recordServer(String username, Long productId, EventType type) {
-        saveAsync("server", username, productId, type, null);
+        saveAsync(new EventData(UUID.randomUUID().toString(), "server", null, username,
+                productId, type, null, "server", "server", "1.0", null, LocalDateTime.now()));
     }
 
     @Async("trackingExecutor")
     public void saveAsync(String sessionId, String username, Long productId, EventType type, Integer valueMs) {
+        saveAsync(new EventData(UUID.randomUUID().toString(), sessionId, null, username,
+                productId, type, valueMs, "server", "server", "1.0", null, LocalDateTime.now()));
+    }
+
+    public void recordClient(String eventId, String sessionId, String anonymousId, Long productId,
+                             EventType type, Integer valueMs, String consentState, String schemaVersion,
+                             String contextJson, LocalDateTime occurredAt) {
+        if (!"analytics".equals(consentState)) {
+            throw new IllegalArgumentException("Analytics consent is required");
+        }
+        if (!products.existsById(productId)) {
+            throw new IllegalArgumentException("Sản phẩm không tồn tại");
+        }
+        if (events.existsByEventId(eventId)) {
+            return;
+        }
+        saveAsync(new EventData(eventId, sessionId, anonymousId, null, productId, type, valueMs,
+                "client", consentState, schemaVersion, contextJson,
+                occurredAt == null ? LocalDateTime.now() : occurredAt));
+    }
+
+    private record EventData(String eventId, String sessionId, String anonymousId, String username,
+                             Long productId, EventType type, Integer valueMs, String source,
+                             String consentState, String schemaVersion, String contextJson,
+                             LocalDateTime occurredAt) {}
+
+    @Async("trackingExecutor")
+    void saveAsync(EventData data) {
         try {
             var event = new UserEvent();
-            event.setSessionId(sessionId);
-            event.setUsername(username);
-            if (username != null) {
-                users.findByUsername(username).ifPresent(user -> event.setUserId(user.getId()));
+            event.setEventId(data.eventId());
+            event.setSessionId(data.sessionId());
+            event.setAnonymousId(data.anonymousId());
+            event.setUsername(data.username());
+            if (data.username() != null) {
+                users.findByUsername(data.username()).ifPresent(user -> event.setUserId(user.getId()));
             }
-            event.setProductId(productId);
-            event.setEventType(type.name());
-            event.setValueMs(valueMs);
+            event.setProductId(data.productId());
+            event.setEventType(data.type().name());
+            event.setValueMs(data.valueMs());
+            event.setSource(data.source());
+            event.setConsentState(data.consentState());
+            event.setSchemaVersion(data.schemaVersion());
+            event.setContextJson(data.contextJson());
+            event.setOccurredAt(data.occurredAt());
             event.setCreatedAt(LocalDateTime.now());
             events.save(event);
         } catch (RuntimeException ex) {
-            log.warn("Unable to persist tracking event {} for product {}", type, productId, ex);
+            log.warn("Unable to persist tracking event {} for product {}", data.type(), data.productId(), ex);
         }
     }
 
