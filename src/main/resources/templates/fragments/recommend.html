@@ -1,6 +1,6 @@
 <section class="recommendations" th:fragment="products(title, products)" th:if="${products != null and !products.isEmpty()}">
   <h2 th:text="${title}">Gợi ý cho bạn</h2>
-  <div class="grid">
+  <div class="grid recommendations-list">
     <article class="card" th:each="p : ${products}">
       <a th:href="@{/products/{id}(id=${p.id})}" th:attr="data-product-id=${p.id}">
         <img alt="product" th:src="${p.imageUrl} ?: 'https://placehold.co/400x300?text=eShop'"/>
