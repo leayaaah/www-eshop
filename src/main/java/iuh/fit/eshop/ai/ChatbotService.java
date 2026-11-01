@@ -53,14 +53,17 @@ public class ChatbotService {
                 .trim();
         Set<String> stopWords = Set.of("tôi", "mình", "muốn", "cần", "mua", "tìm", "cho", "xem",
                 "sản", "phẩm", "một", "vài", "loại", "có", "gì", "nào", "giúp", "với", "giá",
-                "bao", "nhiêu", "không", "xin", "hãy", "tư", "vấn");
+                "bao", "nhiêu", "không", "xin", "hãy", "tư", "vấn", "chào", "hello", "hi");
         String keyword = java.util.Arrays.stream(query.split(" "))
                 .filter(word -> !stopWords.contains(word))
                 .reduce((a, b) -> a + " " + b).orElse("");
         if (keyword.isBlank()) return null;
 
         List<Product> products = productService.search(keyword, null, 0, 5).getContent();
-        if (products.isEmpty()) return null;
+        if (products.isEmpty()) {
+            return "Mình chưa tìm thấy sản phẩm phù hợp với \"" + keyword
+                    + "\". Bạn có thể thử từ khóa khác như điện thoại, laptop hoặc tai nghe.";
+        }
         return "Mình tìm thấy " + products.size() + " sản phẩm phù hợp: " +
                 products.stream()
                         .map(p -> p.getName() + " - " + p.getPrice() + " đồng (/products/" + p.getId() + ")")
