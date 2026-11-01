@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "user_event")
 @Getter
@@ -18,6 +20,9 @@ public class UserEvent {
 
     private String username;
 
+    @Column(name = "user_id")
+    private Long userId;
+
     @Column(name = "event_type")
     private String eventType;
 
@@ -25,4 +30,10 @@ public class UserEvent {
     private Long productId;
 
     private String page;
+
+    @Column(name = "value_ms")
+    private Integer valueMs;
+
+    @Column(name = "created_at_v2")
+    private LocalDateTime createdAt;
 }

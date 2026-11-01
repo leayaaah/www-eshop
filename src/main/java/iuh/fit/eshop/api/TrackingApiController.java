@@ -1,42 +1,34 @@
 package iuh.fit.eshop.api;
 
-import iuh.fit.eshop.entity.UserEvent;
-import iuh.fit.eshop.repository.UserEventRepository;
+import iuh.fit.eshop.tracking.EventType;
+import iuh.fit.eshop.tracking.TrackingService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/track")
 @RequiredArgsConstructor
 public class TrackingApiController {
+    private final TrackingService tracking;
 
-    private final UserEventRepository events;
-
-    // Batch event insert: sessionId, list of {type, page, productId}
-    public record Ev(String type, String page, Long productId) {}
-
-    public record Batch(@NotBlank String sessionId, @Size(max = 20) List<Ev> events) {}
+    public record Event(@NotNull Long productId, @NotNull EventType type,
+                        @Min(1000) @Max(1_800_000) Integer valueMs) {}
 
     @PostMapping
-    public ResponseEntity<Void> track(@Valid @RequestBody Batch b, Authentication auth) {
-        // Lấy username từ JWT trên server, không tin client gửi về
-        String user = auth != null ? auth.getName() : null;
-        b.events().forEach(e -> {
-            UserEvent u = new UserEvent();
-            u.setSessionId(b.sessionId());
-            u.setUsername(user);
-            u.setEventType(e.type());
-            u.setProductId(e.productId());
-            u.setPage(e.page());
-            events.save(u);
-        });
-        return ResponseEntity.ok().build();
+    public ResponseEntity<Void> track(@Valid @RequestBody Event event, HttpServletRequest request) {
+        if (event.type() != EventType.CLICK && event.type() != EventType.DWELL) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (event.type() == EventType.DWELL && event.valueMs() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        tracking.record(request, event.productId(), event.type(), event.valueMs());
+        return ResponseEntity.noContent().build();
     }
 }

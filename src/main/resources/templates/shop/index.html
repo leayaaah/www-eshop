@@ -61,6 +61,7 @@
    <h1>
     Cửa hàng
    </h1>
+   <div th:replace="~{fragments/recommend :: products('Gợi ý cho bạn', ${recommended})}"></div>
    <form class="filters" method="get" th:action="@{/}">
     <input name="keyword" placeholder="Tìm tên sản phẩm" th:value="${keyword}"/>
     <select name="categoryId">
@@ -76,7 +77,7 @@
    </form>
    <div class="grid">
     <article class="card" th:each="p:${products.content}">
-     <a th:href="@{/products/{id}(id=${p.id})}">
+     <a th:href="@{/products/{id}(id=${p.id})}" th:attr="data-product-id=${p.id}">
       <img alt="product" th:src="${p.imageUrl} ?: 'https://placehold.co/400x300?text=eShop'"/>
       <h3 th:text="${p.name}">
       </h3>
@@ -110,5 +111,6 @@
   <footer>
    IUH eShop · Spring Boot · MariaDB
   </footer>
+  <div th:replace="~{fragments/chat :: chat}"></div>
  </body>
 </html>

@@ -1,0 +1,12 @@
+<section class="recommendations" th:fragment="products(title, products)" th:if="${products != null and !products.isEmpty()}">
+  <h2 th:text="${title}">Gợi ý cho bạn</h2>
+  <div class="grid">
+    <article class="card" th:each="p : ${products}">
+      <a th:href="@{/products/{id}(id=${p.id})}" th:attr="data-product-id=${p.id}">
+        <img alt="product" th:src="${p.imageUrl} ?: 'https://placehold.co/400x300?text=eShop'"/>
+        <h3 th:text="${p.name}"></h3>
+      </a>
+      <p class="price" th:text="${#numbers.formatDecimal(p.price,0,'COMMA',0,'POINT')} + ' ₫'"></p>
+    </article>
+  </div>
+</section>
