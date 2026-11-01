@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import java.math.BigDecimal;
 @Controller
 @RequiredArgsConstructor
 public class ShopController  {
@@ -16,13 +17,19 @@ public class ShopController  {
     private final iuh.fit.eshop.tracking.TrackingService tracking;
 @GetMapping("/")
 public String index(@RequestParam(required=false) String keyword,@RequestParam(required=false) Long categoryId,
+                    @RequestParam(required=false) BigDecimal minPrice, @RequestParam(required=false) BigDecimal maxPrice,
+                    @RequestParam(defaultValue="false") boolean inStock, @RequestParam(defaultValue="newest") String sort,
                     @RequestParam(defaultValue="0") int page, Model model, HttpServletRequest request) {
-        var result=products.search(keyword,categoryId,page,12);
+        var result=products.search(keyword,categoryId,minPrice,maxPrice,inStock,sort,page,12);
         model.addAttribute("products",result);
         model.addAttribute("keyword",keyword);
         model.addAttribute("categoryId",categoryId);
+        model.addAttribute("minPrice",minPrice);
+        model.addAttribute("maxPrice",maxPrice);
+        model.addAttribute("inStock",inStock);
+        model.addAttribute("sort",sort);
         model.addAttribute("categories",categories.findAll());
-        if (keyword == null && categoryId == null) {
+        if (keyword == null && categoryId == null && minPrice == null && maxPrice == null && !inStock && "newest".equals(sort)) {
             var auth = SecurityContextHolder.getContext().getAuthentication();
             var username = auth == null || !auth.isAuthenticated() ? null : auth.getName();
             String sessionId = username == null ? request.getSession(true).getId() : null;

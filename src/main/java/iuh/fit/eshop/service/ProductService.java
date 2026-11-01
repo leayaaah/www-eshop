@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.context.ApplicationEventPublisher;
 import iuh.fit.eshop.ai.ProductChangedEvent;
+import java.math.BigDecimal;
 import java.util.List;
 @Service
 @RequiredArgsConstructor
@@ -17,7 +18,19 @@ public class ProductService  {
     private final CategoryRepository categories;
     private final ApplicationEventPublisher publisher;
     public Page<Product> search(String keyword,Long categoryId,int page,int size) {
-        return products.search(keyword==null||keyword.isBlank()?null:keyword.trim(),categoryId,PageRequest.of(Math.max(0,page),Math.min(Math.max(1,size),50),Sort.by("id").descending()));
+        return search(keyword, categoryId, null, null, false, "newest", page, size);
+    }
+    public Page<Product> search(String keyword, Long categoryId, BigDecimal minPrice, BigDecimal maxPrice,
+                                boolean inStock, String sort, int page, int size) {
+        Sort ordering = switch (sort == null ? "newest" : sort) {
+            case "priceAsc" -> Sort.by("price").ascending().and(Sort.by("id").descending());
+            case "priceDesc" -> Sort.by("price").descending().and(Sort.by("id").descending());
+            case "name" -> Sort.by("name").ascending().and(Sort.by("id").descending());
+            default -> Sort.by("id").descending();
+        };
+        return products.search(keyword == null || keyword.isBlank() ? null : keyword.trim(), categoryId,
+                minPrice, maxPrice, inStock,
+                PageRequest.of(Math.max(0, page), Math.min(Math.max(1, size), 50), ordering));
     }
     public Product findById(Long id) {
         return products.findDetailedById(id).orElseThrow(()->new NotFoundException("Không tìm thấy sản phẩm #"+id));

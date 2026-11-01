@@ -70,46 +70,96 @@
    <div id="catalog">
     <h2>Cửa hàng</h2>
    </div>
-   <div th:replace="~{fragments/recommend :: products('Gợi ý cho bạn', ${recommended})}"></div>
-   <form class="filters" method="get" th:action="@{/}">
-    <input name="keyword" placeholder="Tìm tên sản phẩm" th:value="${keyword}"/>
-    <select name="categoryId">
-     <option value="">
-      Tất cả danh mục
-     </option>
-     <option th:each="c:${categories}" th:selected="${categoryId == c.id}" th:text="${c.name}" th:value="${c.id}">
-     </option>
-    </select>
-    <button>
-     Tìm kiếm
-    </button>
-   </form>
-   <div class="grid">
-    <article class="card" th:each="p:${products.content}">
-     <a th:href="@{/products/{id}(id=${p.id})}" th:attr="data-product-id=${p.id}">
-      <img alt="product" th:src="${p.imageUrl} ?: 'https://placehold.co/400x300?text=eShop'"/>
-      <span class="category-badge" th:if="${p.category != null}" th:text="${p.category.name}"></span>
-      <h3 th:text="${p.name}">
-      </h3>
-     </a>
-     <p class="price" th:text="${#numbers.formatDecimal(p.price,0,'COMMA',0,'POINT')} + ' ₫'">
-     </p>
-     <p><span class="stock-badge" th:classappend="${p.quantity < 10} ? ' low' : ''" th:text="${p.quantity > 0 ? 'Còn hàng · ' + p.quantity : 'Hết hàng'}"></span></p>
-     <form method="post" sec:authorize="hasAuthority('ROLE_CUSTOMER')" th:action="@{/cart/add/{id}(id=${p.id})}">
-      <input min="1" name="quantity" th:max="${p.quantity}" type="number" value="1"/>
-      <button th:disabled="${p.quantity == 0}">
-       Thêm vào giỏ
-      </button>
+   <div th:if="${keyword == null and categoryId == null and minPrice == null and maxPrice == null and !inStock and sort == 'newest'}">
+    <div th:replace="~{fragments/recommend :: products('Gợi ý cho bạn', ${recommended})}"></div>
+   </div>
+   <div class="catalog-layout">
+    <aside class="filter-sidebar">
+     <div class="filter-heading">
+      <h2>Bộ lọc tìm kiếm</h2>
+      <a th:href="@{/}">Đặt lại</a>
+     </div>
+     <form class="filter-form" method="get" th:action="@{/}">
+      <label>
+       Tìm kiếm
+       <input name="keyword" placeholder="Tên sản phẩm" th:value="${keyword}"/>
+      </label>
+      <fieldset>
+       <legend>Danh mục ngành hàng</legend>
+       <label class="filter-option">
+        <input name="categoryId" th:checked="${categoryId == null}" type="radio" value=""/>
+        <span>Tất cả sản phẩm</span>
+       </label>
+       <label class="filter-option" th:each="c:${categories}">
+        <input name="categoryId" th:checked="${categoryId == c.id}" th:value="${c.id}" type="radio"/>
+        <span th:text="${c.name}"></span>
+       </label>
+      </fieldset>
+      <fieldset>
+       <legend>Khoảng giá (VNĐ)</legend>
+       <div class="price-range">
+        <input aria-label="Giá thấp nhất" min="0" name="minPrice" placeholder="Từ" step="1000" th:value="${minPrice}" type="number"/>
+        <input aria-label="Giá cao nhất" min="0" name="maxPrice" placeholder="Đến" step="1000" th:value="${maxPrice}" type="number"/>
+       </div>
+      </fieldset>
+      <fieldset>
+       <legend>Tình trạng</legend>
+       <label class="filter-option">
+        <input name="inStock" th:checked="${inStock}" type="checkbox" value="true"/>
+        <span>Chỉ xem sản phẩm còn hàng</span>
+       </label>
+      </fieldset>
+      <button class="filter-submit" type="submit">Áp dụng bộ lọc</button>
      </form>
-    </article>
+    </aside>
+    <section class="catalog-results">
+     <div class="catalog-toolbar">
+      <p><strong th:text="${products.totalElements}">0</strong> sản phẩm</p>
+      <label>
+       Sắp xếp theo
+       <select name="sort" onchange="this.form.submit()" form="sort-form">
+        <option th:selected="${sort == 'newest'}" value="newest">Mới nhất</option>
+        <option th:selected="${sort == 'priceAsc'}" value="priceAsc">Giá tăng dần</option>
+        <option th:selected="${sort == 'priceDesc'}" value="priceDesc">Giá giảm dần</option>
+        <option th:selected="${sort == 'name'}" value="name">Tên A-Z</option>
+       </select>
+      </label>
+      <form id="sort-form" method="get" th:action="@{/}">
+       <input name="keyword" th:value="${keyword}" type="hidden"/>
+       <input name="categoryId" th:value="${categoryId}" type="hidden"/>
+       <input name="minPrice" th:value="${minPrice}" type="hidden"/>
+       <input name="maxPrice" th:value="${maxPrice}" type="hidden"/>
+       <input name="inStock" th:value="${inStock}" type="hidden"/>
+      </form>
+     </div>
+     <div class="grid">
+      <article class="card" th:each="p:${products.content}">
+       <a th:href="@{/products/{id}(id=${p.id})}" th:attr="data-product-id=${p.id}">
+        <img alt="product" th:src="${p.imageUrl} ?: 'https://placehold.co/400x300?text=eShop'"/>
+        <span class="category-badge" th:if="${p.category != null}" th:text="${p.category.name}"></span>
+        <h3 th:text="${p.name}">
+        </h3>
+       </a>
+       <p class="price" th:text="${#numbers.formatDecimal(p.price,0,'COMMA',0,'POINT')} + ' ₫'">
+       </p>
+       <p><span class="stock-badge" th:classappend="${p.quantity < 10} ? ' low' : ''" th:text="${p.quantity > 0 ? 'Còn hàng · ' + p.quantity : 'Hết hàng'}"></span></p>
+       <form method="post" sec:authorize="hasAuthority('ROLE_CUSTOMER')" th:action="@{/cart/add/{id}(id=${p.id})}">
+        <input min="1" name="quantity" th:max="${p.quantity}" type="number" value="1"/>
+        <button th:disabled="${p.quantity == 0}">
+         Thêm vào giỏ
+        </button>
+       </form>
+      </article>
+     </div>
+    </section>
    </div>
    <div class="pagination">
-    <a th:href="@{/(keyword=${keyword},categoryId=${categoryId},page=${products.number-1})}" th:if="${products.hasPrevious()}">
+    <a th:href="@{/(keyword=${keyword},categoryId=${categoryId},minPrice=${minPrice},maxPrice=${maxPrice},inStock=${inStock},sort=${sort},page=${products.number-1})}" th:if="${products.hasPrevious()}">
      Trước
     </a>
     <span th:text="${products.number + 1 + ' / ' + products.totalPages}">
     </span>
-    <a th:href="@{/(keyword=${keyword},categoryId=${categoryId},page=${products.number+1})}" th:if="${products.hasNext()}">
+    <a th:href="@{/(keyword=${keyword},categoryId=${categoryId},minPrice=${minPrice},maxPrice=${maxPrice},inStock=${inStock},sort=${sort},page=${products.number+1})}" th:if="${products.hasNext()}">
      Sau
     </a>
    </div>
