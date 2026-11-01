@@ -22,4 +22,14 @@ public interface OrderRepository extends JpaRepository<ShopOrder,Long>  {
         group by d.product_id
         """, nativeQuery = true)
 List<Object[]> salesSince(@Param("since") LocalDateTime since);
+
+@Query(value = """
+    select d.product_id, date(o.order_date), coalesce(sum(d.quantity), 0)
+    from order_detail d join orders o on o.id = d.order_id
+    left join users u on u.id = o.user_id
+    where o.order_date >= :since
+      and (o.user_id is null or u.role <> 'ROLE_SELLER')
+    group by d.product_id, date(o.order_date)
+    """, nativeQuery = true)
+List<Object[]> salesByDaySince(@Param("since") LocalDateTime since);
 }

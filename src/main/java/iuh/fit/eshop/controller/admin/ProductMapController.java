@@ -1,8 +1,12 @@
 package iuh.fit.eshop.controller.admin;
 
 import iuh.fit.eshop.ai.ProjectionService;
+import iuh.fit.eshop.ai.ProductHeatService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -13,6 +17,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ProductMapController {
     private final ProjectionService projection;
+    private final ProductHeatService heat;
 
     @GetMapping("/data")
     public ProductMapResponse data() {
@@ -22,6 +27,20 @@ public class ProductMapController {
                 .toList();
         return new ProductMapResponse(result.points(), result.points().size(),
                 result.explainedVariance(), missing);
+    }
+
+    @GetMapping("/heat")
+    public ProductHeatService.HeatResult heat(
+            @RequestParam(defaultValue = "INTEREST") String metric,
+            @RequestParam(defaultValue = "30") int days) {
+        if (days != 7 && days != 30 && days != 90) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Khoảng thời gian phải là 7, 30 hoặc 90 ngày");
+        }
+        try {
+            return heat.heat(ProductHeatService.Metric.valueOf(metric.trim().toUpperCase()), days);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chỉ số không hợp lệ");
+        }
     }
 
     public record ProductMapResponse(List<ProjectionService.ProductMapPoint> points,

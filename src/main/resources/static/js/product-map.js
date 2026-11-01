@@ -5,25 +5,28 @@
     const legend = document.getElementById('product-map-legend');
     const summary = document.getElementById('product-map-summary');
     const details = document.getElementById('product-map-details');
+    const ranking = document.getElementById('product-map-ranking');
+    const categories = document.getElementById('product-map-categories');
     const search = document.getElementById('product-map-search');
+    const metric = document.getElementById('product-map-metric');
+    const days = document.getElementById('product-map-days');
+    const mode = document.getElementById('product-map-mode');
     const colors = ['#2563eb', '#059669', '#d97706', '#db2777', '#7c3aed', '#0891b2', '#dc2626', '#65a30d'];
     let points = [];
+    let heat = new Map();
     let activeCategories = new Set();
+    let explainedVariance = 0;
 
-    fetch('/admin/products/map/data', {headers: {'Accept': 'application/json'}})
-        .then(response => {
-            if (!response.ok) throw new Error('Không thể tải dữ liệu bản đồ.');
-            return response.json();
-        })
-        .then(data => {
+    Promise.all([load('/admin/products/map/data'), loadHeat()])
+        .then(([data, heatData]) => {
             points = data.points || [];
+            explainedVariance = data.explainedVariance || 0;
+            applyHeat(heatData);
             activeCategories = new Set(points.map(point => point.category));
-            const missing = (data.missingVectors || []).length;
-            summary.textContent = `${data.productCount} sản phẩm có vector · `
-                + `Hai trục giải thích ${(data.explainedVariance * 100).toFixed(1)}% phương sai`
-                + (missing ? ` · ${missing} sản phẩm chưa có vector` : '');
             renderLegend();
             render();
+            renderRanking(heatData);
+            renderCategories(heatData);
         })
         .catch(error => {
             summary.textContent = error.message;
@@ -31,6 +34,41 @@
         });
 
     search.addEventListener('input', render);
+    metric.addEventListener('change', refreshHeat);
+    days.addEventListener('change', refreshHeat);
+    mode.addEventListener('change', render);
+
+    function load(url) {
+        return fetch(url, {headers: {'Accept': 'application/json'}}).then(response => {
+            if (!response.ok) throw new Error('Không thể tải dữ liệu bản đồ.');
+            return response.json();
+        });
+    }
+
+    function loadHeat() {
+        return load(`/admin/products/map/heat?metric=${metric.value}&days=${days.value}`);
+    }
+
+    function refreshHeat() {
+        summary.textContent = 'Đang tải số liệu nhiệt...';
+        loadHeat().then(data => {
+            applyHeat(data);
+            render();
+            renderRanking(data);
+            renderCategories(data);
+        }).catch(error => {
+            summary.textContent = error.message;
+            summary.classList.add('alert');
+        });
+    }
+
+    function applyHeat(data) {
+        heat = new Map((data.points || []).map(point => [point.productId, point]));
+        summary.textContent = `${points.length} sản phẩm có vector · `
+            + `Hai trục giải thích ${(explainedVariance * 100).toFixed(1)}% phương sai · `
+            + `${data.days} ngày · ${metricLabel(data.metric)} · `
+            + `${Math.round(data.views)} lượt xem, ${Math.round(data.carts)} thêm giỏ, ${Math.round(data.purchases)} sản phẩm đã mua`;
+    }
 
     function renderLegend() {
         const categories = [...new Set(points.map(point => point.category))].sort();
@@ -57,21 +95,24 @@
         svg.replaceChildren();
         const query = search.value.trim().toLocaleLowerCase();
         points.forEach((point, index) => {
+            const heatPoint = heat.get(point.id) || {intensity: 0};
             const visible = activeCategories.has(point.category);
             const match = !query || point.name.toLocaleLowerCase().includes(query);
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('cx', 50 + point.x * 900);
             circle.setAttribute('cy', 630 - point.y * 580);
-            circle.setAttribute('r', match && query ? '10' : '7');
+            const size = mode.value === 'opacity' ? 7 : 6 + heatPoint.intensity * 10;
+            circle.setAttribute('r', match && query ? size + 3 : size);
             circle.setAttribute('fill', colors[categoryIndex(point.category) % colors.length]);
+            circle.style.opacity = mode.value === 'size' ? '1' : String(.2 + heatPoint.intensity * .8);
             circle.classList.add('product-map-point');
             if (!visible) circle.classList.add('is-hidden');
             if (query && !match) circle.classList.add('is-dimmed');
             circle.setAttribute('tabindex', visible ? '0' : '-1');
             circle.setAttribute('aria-label', point.name);
-            circle.addEventListener('mouseenter', event => showTooltip(event, point));
+            circle.addEventListener('mouseenter', event => showTooltip(event, point, heatPoint));
             circle.addEventListener('mouseleave', hideTooltip);
-            circle.addEventListener('focus', event => showTooltip(event, point));
+            circle.addEventListener('focus', event => showTooltip(event, point, heatPoint));
             circle.addEventListener('blur', hideTooltip);
             circle.addEventListener('click', () => showDetails(point));
             svg.append(circle);
@@ -82,9 +123,11 @@
         return [...new Set(points.map(point => point.category))].sort().indexOf(category);
     }
 
-    function showTooltip(event, point) {
+    function showTooltip(event, point, heatPoint) {
         const title = document.createElement('title');
-        title.textContent = `${point.name} · ${point.category} · ${formatPrice(point.price)}`;
+        title.textContent = `${point.name} · ${point.category} · ${formatPrice(point.price)}`
+            + ` · xem ${Math.round(heatPoint.views || 0)} · giỏ ${Math.round(heatPoint.carts || 0)}`
+            + ` · mua ${Math.round(heatPoint.purchases || 0)} · chuyển đổi ${formatPercent(heatPoint.conversion)}`;
         event.currentTarget.replaceChildren(title);
     }
 
@@ -97,7 +140,10 @@
         const heading = document.createElement('h2');
         heading.textContent = point.name;
         const meta = document.createElement('p');
-        meta.textContent = `${point.category} · ${formatPrice(point.price)}`;
+        const heatPoint = heat.get(point.id) || {};
+        meta.textContent = `${point.category} · ${formatPrice(point.price)} · `
+            + `xem ${Math.round(heatPoint.views || 0)} · giỏ ${Math.round(heatPoint.carts || 0)} · `
+            + `mua ${Math.round(heatPoint.purchases || 0)} · chuyển đổi ${formatPercent(heatPoint.conversion)}`;
         const title = document.createElement('h3');
         title.textContent = '5 sản phẩm gần nhất';
         const list = document.createElement('ul');
@@ -114,5 +160,52 @@
 
     function formatPrice(price) {
         return new Intl.NumberFormat('vi-VN', {style: 'currency', currency: 'VND'}).format(price);
+    }
+
+    function formatPercent(value) {
+        return value && value >= 0.05 ? `${(value * 100).toFixed(1)}%` : 'chưa đủ 5 lượt xem';
+    }
+
+    function metricLabel(value) {
+        return {INTEREST: 'điểm quan tâm', VIEWS: 'lượt xem', CARTS: 'thêm giỏ',
+            PURCHASES: 'mua', CONVERSION: 'tỉ lệ chuyển đổi'}[value] || value;
+    }
+
+    function renderRanking(data) {
+        const sorted = [...(data.points || [])].sort((a, b) => b.intensity - a.intensity);
+        ranking.replaceChildren();
+        [['Top 5 nóng nhất', sorted.slice(0, 5)], ['Top 5 nguội nhất', sorted.slice(-5).reverse()]]
+            .forEach(([headingText, values]) => {
+                const section = document.createElement('section');
+                section.className = 'ranking';
+                const heading = document.createElement('h3');
+                heading.textContent = headingText;
+                const list = document.createElement('ol');
+                values.forEach(value => {
+                    const item = document.createElement('li');
+                    item.textContent = `${value.productId} · ${metricLabel(data.metric)} ${value.raw.toFixed(2)}`;
+                    list.append(item);
+                });
+                section.append(heading, list);
+                ranking.append(section);
+            });
+    }
+
+    function renderCategories(data) {
+        categories.replaceChildren();
+        const heading = document.createElement('h3');
+        heading.textContent = 'Tổng hợp theo danh mục';
+        categories.append(heading);
+        [...(data.categories || [])].sort((a, b) => b.intensity - a.intensity).forEach(category => {
+            const row = document.createElement('div');
+            row.className = 'heat-category';
+            const label = document.createElement('span');
+            label.textContent = category.category;
+            const bar = document.createElement('span');
+            bar.className = 'heat-category-bar';
+            bar.style.width = `${Math.max(3, category.intensity * 100)}%`;
+            row.append(label, bar);
+            categories.append(row);
+        });
     }
 })();

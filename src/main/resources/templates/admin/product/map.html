@@ -28,8 +28,31 @@
         <label class="map-search">Tìm sản phẩm
             <input id="product-map-search" type="search" placeholder="Nhập tên sản phẩm"/>
         </label>
+        <label class="map-search">Chỉ số
+            <select id="product-map-metric">
+                <option value="INTEREST">Điểm quan tâm</option>
+                <option value="VIEWS">Lượt xem</option>
+                <option value="CARTS">Thêm giỏ</option>
+                <option value="PURCHASES">Mua</option>
+                <option value="CONVERSION">Tỉ lệ chuyển đổi</option>
+            </select>
+        </label>
+        <label class="map-search">Khoảng thời gian
+            <select id="product-map-days">
+                <option value="7">7 ngày</option>
+                <option value="30" selected>30 ngày</option>
+                <option value="90">90 ngày</option>
+            </select>
+        </label>
+        <label class="map-search">Hiển thị
+            <select id="product-map-mode">
+                <option value="both">Kích thước + độ đậm</option>
+                <option value="size">Chỉ kích thước</option>
+                <option value="opacity">Chỉ độ đậm</option>
+            </select>
+        </label>
     </div>
-    <div class="map-summary" id="product-map-summary">Đang tải dữ liệu…</div>
+    <div class="map-summary" id="product-map-summary">Đang tải dữ liệu...</div>
     <div class="product-map-layout">
         <section class="product-map-card">
             <div class="product-map-legend" id="product-map-legend"></div>
@@ -41,8 +64,11 @@
         <aside class="product-map-details" id="product-map-details">
             <h2>Chi tiết sản phẩm</h2>
             <p>Chọn một điểm trên bản đồ để xem các sản phẩm gần nhất.</p>
+            <div id="product-map-ranking"></div>
+            <div id="product-map-categories"></div>
         </aside>
     </div>
+    <p class="map-note">Nhiệt phản ánh cả vị trí hiển thị và hành vi tổng hợp của người dùng. Số liệu chỉ mang tính tham khảo.</p>
 </main>
 <footer>IUH eShop · Spring Boot · MariaDB</footer>
 <script th:src="@{/js/product-map.js}"></script>
