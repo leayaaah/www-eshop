@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 public interface OrderRepository extends JpaRepository<ShopOrder,Long>  {
     @EntityGraph(attributePaths={"details","details.product","user"}) List<ShopOrder> findAllByOrderByIdDesc();
     @EntityGraph(attributePaths={"details","details.product","user"})
@@ -13,4 +14,12 @@ public interface OrderRepository extends JpaRepository<ShopOrder,Long>  {
     List<ShopOrder> findForUserByUsername(@Param("username") String username);
     @EntityGraph(attributePaths={"details","details.product","user"})
 @Query("select distinct o from ShopOrder o where o.id=:id") Optional<ShopOrder> findDetailedById(@Param("id") Long id);
+
+@Query(value = """
+        select d.product_id, coalesce(sum(d.quantity), 0)
+        from order_detail d join orders o on o.id = d.order_id
+        where o.order_date >= :since
+        group by d.product_id
+        """, nativeQuery = true)
+List<Object[]> salesSince(@Param("since") LocalDateTime since);
 }

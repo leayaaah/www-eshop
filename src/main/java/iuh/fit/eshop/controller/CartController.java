@@ -3,6 +3,7 @@ import iuh.fit.eshop.cart.Cart;
 import iuh.fit.eshop.service.ProductService;
 import iuh.fit.eshop.tracking.EventType;
 import iuh.fit.eshop.tracking.TrackingService;
+import iuh.fit.eshop.ai.RecommendationService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -19,6 +20,7 @@ public class CartController  {
     private final Cart cart;
     private final ProductService products;
     private final TrackingService tracking;
+    private final RecommendationService recommendations;
 @GetMapping
 public String view(Model model)  {
         model.addAttribute("cart", cart);
@@ -37,6 +39,8 @@ public String add(@PathVariable Long id,
         }
         cart.add(product, requested);
         tracking.recordServer(request, id, EventType.ADD_TO_CART);
+        var authentication = request.getUserPrincipal();
+        recommendations.invalidate(authentication == null ? null : authentication.getName(), request.getSession(false) == null ? null : request.getSession(false).getId());
         return "redirect:/cart";
     }
 @PostMapping("/update/{id}")

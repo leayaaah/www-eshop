@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import iuh.fit.eshop.tracking.EventType;
 import iuh.fit.eshop.tracking.TrackingService;
+import iuh.fit.eshop.ai.RecommendationService;
 import java.math.BigDecimal;
 import java.util.List;
 @Service
@@ -19,6 +20,7 @@ public class OrderService  {
     private final ProductRepository products;
     private final UserRepository users;
     private final TrackingService tracking;
+    private final RecommendationService recommendations;
 @Transactional
 @PreAuthorize("hasRole('CUSTOMER')")
 public ShopOrder checkout(Cart cart,CheckoutForm form,String username) {
@@ -49,6 +51,7 @@ public ShopOrder checkout(Cart cart,CheckoutForm form,String username) {
         for (var detail : saved.getDetails()) {
             tracking.recordServer(username, detail.getProduct().getId(), EventType.PURCHASE);
         }
+        recommendations.invalidate(username, null);
         cart.clear();
         return saved;
     }

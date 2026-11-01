@@ -8,6 +8,7 @@ import iuh.fit.eshop.repository.ProductRepository;
 import iuh.fit.eshop.repository.UserEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -21,12 +22,18 @@ public class RecommendationService {
     private final OrderRepository orders;
     private final ObjectProvider<Cart> cartProvider;
     private final ProductVectorSearchService vectorSearch;
+    private final HybridRecommendationService hybrid;
+    @Value("${app.reco.algorithm:v2}")
+    private String algorithm;
 
     public List<Product> recommend(String username, int limit) {
         return recommend(username, null, limit);
     }
 
     public List<Product> recommend(String username, String sessionId, int limit) {
+        if ("v2".equalsIgnoreCase(algorithm)) {
+            return hybrid.recommend(username, sessionId, limit);
+        }
         Map<Long, Double> scores = scoreEvents(username, sessionId);
         Set<Long> excluded = excludedProducts(username);
         List<Product> all = products.findAllWithCategory();
@@ -43,12 +50,19 @@ public class RecommendationService {
     }
 
     public List<Product> similar(Product product, int limit) {
+        if ("v2".equalsIgnoreCase(algorithm)) {
+            return hybrid.similar(product, limit);
+        }
         List<Product> candidates = vectorSearch.similar(
                 product.getName() + ". " + (product.getDescription() == null ? "" : product.getDescription()), 30);
         if (candidates.isEmpty()) candidates = products.findAllWithCategory();
         return diversify(candidates.stream()
                 .filter(p -> !Objects.equals(p.getId(), product.getId()) && p.getQuantity() > 0)
                 .toList(), limit);
+    }
+
+    public void invalidate(String username, String sessionId) {
+        hybrid.invalidate(username, sessionId);
     }
 
     private Map<Long, Double> scoreEvents(String username, String sessionId) {
