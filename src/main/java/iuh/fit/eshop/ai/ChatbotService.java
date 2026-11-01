@@ -23,6 +23,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.time.Duration;
+import reactor.core.publisher.Flux;
 import org.springframework.beans.factory.annotation.Value;
 
 @Service
@@ -50,6 +52,7 @@ public class ChatbotService {
             log.info("Chat request stage=quick-search durationMs={}", elapsedMs(requestStartedAt));
             return quickAnswer;
         }
+
         String localProductAnswer = localSemanticProductSearch(message);
         if (localProductAnswer != null) {
             log.info("Chat request stage=local-semantic-search durationMs={}", elapsedMs(requestStartedAt));
@@ -103,6 +106,33 @@ public class ChatbotService {
         String fallback = productFallback(message);
         log.info("Chat request stage=fallback-complete durationMs={}", elapsedMs(requestStartedAt));
         return fallback;
+    }
+
+    public Flux<String> stream(String message, String conversationId) {
+        String quickAnswer = quickProductSearch(message);
+        if (quickAnswer != null) return Flux.just(quickAnswer);
+        String localProductAnswer = localSemanticProductSearch(message);
+        if (localProductAnswer != null) return Flux.just(localProductAnswer);
+
+        ChatClient client = clients.getIfAvailable();
+        if (client == null || memories.getIfAvailable() == null) {
+            return Flux.just(productFallback(message));
+        }
+
+        return Flux.defer(() -> {
+                    ToolCallBudget.start();
+                    return client.prompt().user(message).tools(productTools, orderTools)
+                            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
+                            .stream().content()
+                            .filter(chunk -> chunk != null && !chunk.isBlank())
+                            .doFinally(signal -> ToolCallBudget.clear());
+                })
+                .timeout(Duration.ofMillis(chatTimeoutMillis),
+                        Flux.defer(() -> Flux.just(productFallback(message))))
+                .onErrorResume(ex -> {
+                    log.warn("Chat stream failed; using fallback: {}", ex.getMessage());
+                    return Flux.just(productFallback(message));
+                });
     }
 
     private String productFallback(String message) {
