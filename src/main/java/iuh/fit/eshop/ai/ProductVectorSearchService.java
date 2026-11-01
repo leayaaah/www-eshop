@@ -8,12 +8,14 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ProductVectorSearchService {
     private final ObjectProvider<VectorStore> vectorStores;
     private final ProductService products;
@@ -24,19 +26,25 @@ public class ProductVectorSearchService {
         if (store == null) {
             return products.search(query, null, 0, limit).getContent();
         }
-        List<Product> result = store.similaritySearch(SearchRequest.builder()
-                        .query(query.trim())
-                        .topK(Math.max(1, Math.min(limit, 50)))
-                        .similarityThreshold(0.3)
-                        .filterExpression("source == 'product'")
-                        .build())
-                .stream()
-                .map(this::productId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .map(this::safeFind)
-                .filter(Objects::nonNull)
-                .toList();
+        List<Product> result;
+        try {
+            result = store.similaritySearch(SearchRequest.builder()
+                            .query(query.trim())
+                            .topK(Math.max(1, Math.min(limit, 50)))
+                            .similarityThreshold(0.3)
+                            .filterExpression("source == 'product'")
+                            .build())
+                    .stream()
+                    .map(this::productId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .map(this::safeFind)
+                    .filter(Objects::nonNull)
+                    .toList();
+        } catch (RuntimeException ex) {
+            log.warn("Vector product search failed; using SQL fallback: {}", ex.getMessage());
+            return products.search(query, null, 0, limit).getContent();
+        }
         return result.isEmpty() ? products.search(query, null, 0, limit).getContent() : result;
     }
 
