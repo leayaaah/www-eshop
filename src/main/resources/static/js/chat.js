@@ -17,6 +17,12 @@
     setPanelOpen(false);
     toggle.focus();
   });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !panel.hidden) {
+      setPanelOpen(false);
+      toggle.focus();
+    }
+  });
   widget.querySelector('.chat-form').addEventListener('submit', async function (event) {
     event.preventDefault();
     var input = event.target.message;
