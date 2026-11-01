@@ -119,6 +119,25 @@ class ChatbotReliabilityTests {
         verify(vector).search(message, 5);
     }
 
+    @Test
+    void longProductAdviceUsesOneLocalVectorSearchBeforeGemini() {
+        ChatClient client = mock(ChatClient.class);
+        ProductVectorSearchService vector = mock(ProductVectorSearchService.class);
+        ProductService products = mock(ProductService.class);
+        Product laptop = product(11L);
+        when(vector.search(anyString(), eq(8))).thenReturn(List.of(laptop));
+        ChatbotService service = new ChatbotService(provider(client), provider(mock(ChatMemory.class)),
+                mock(ProductTools.class), mock(OrderTools.class), vector, products);
+
+        String answer = service.chat(
+                "Tôi đang cần tư vấn một chiếc laptop học tập và lập trình, ưu tiên nhẹ, pin tốt, RAM từ 16GB, ngân sách tối đa khoảng 20 triệu đồng",
+                "conversation-1");
+
+        assertTrue(answer.contains("/products/11"));
+        verify(vector).search(anyString(), eq(8));
+        verifyNoInteractions(client);
+    }
+
     private static Product product(Long id) {
         Category category = new Category();
         category.setName("Laptop");

@@ -13,6 +13,10 @@ import java.util.Set;
 import java.util.List;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.math.BigDecimal;
+import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -42,6 +46,8 @@ public class ChatbotService {
     public String chat(String message, String conversationId) {
         String quickAnswer = quickProductSearch(message);
         if (quickAnswer != null) return quickAnswer;
+        String localProductAnswer = localSemanticProductSearch(message);
+        if (localProductAnswer != null) return localProductAnswer;
 
         ChatClient client = clients.getIfAvailable();
         if (client != null && memories.getIfAvailable() != null) {
@@ -87,6 +93,47 @@ public class ChatbotService {
         return "Tôi chưa thể hoàn tất câu trả lời AI lúc này. Bạn có thể tham khảo: " +
                 products.stream().map(p -> p.getName() + " (/products/" + p.getId() + ")")
                         .reduce((a, b) -> a + ", " + b).orElse("");
+    }
+
+    private String localSemanticProductSearch(String message) {
+        if (message == null) return null;
+        String normalized = message.toLowerCase(Locale.ROOT);
+        if (!containsProductIntent(normalized)) return null;
+
+        BigDecimal maxPrice = extractMaxPrice(normalized);
+        String category = normalized.contains("laptop") ? "laptop" : null;
+        List<Product> products = vectorSearch.search(message, 8).stream()
+                .filter(product -> maxPrice == null || product.getPrice().compareTo(maxPrice) <= 0)
+                .filter(product -> category == null
+                        || product.getCategory().getName().toLowerCase(Locale.ROOT).contains(category))
+                .limit(5)
+                .toList();
+        if (products.isEmpty()) return null;
+
+        return "Mình tìm thấy " + products.size() + " sản phẩm phù hợp: " +
+                products.stream()
+                        .map(p -> p.getName() + " - " + p.getPrice() + " đồng (/products/" + p.getId() + ")")
+                        .reduce((a, b) -> a + "; " + b).orElse("");
+    }
+
+    private boolean containsProductIntent(String message) {
+        return message.contains("laptop") || message.contains("máy tính")
+                || message.contains("điện thoại") || message.contains("tai nghe")
+                || message.contains("mua") || message.contains("tư vấn");
+    }
+
+    private BigDecimal extractMaxPrice(String message) {
+        Matcher million = Pattern.compile("(?:tối đa|dưới|khoảng|ngân sách)\\s*(?:là|tầm)?\\s*(\\d+(?:[.,]\\d+)?)\\s*(?:triệu|tr)").matcher(message);
+        if (million.find()) {
+            return BigDecimal.valueOf(Double.parseDouble(million.group(1).replace(',', '.')))
+                    .multiply(BigDecimal.valueOf(1_000_000));
+        }
+        Matcher exact = Pattern.compile("(?:tối đa|dưới|khoảng|ngân sách)\\s*(?:là|tầm)?\\s*([\\d.,]+)\\s*(?:đ|đồng|vnd)?").matcher(message);
+        if (exact.find()) {
+            String value = exact.group(1).replace(".", "").replace(",", "");
+            return new BigDecimal(value);
+        }
+        return null;
     }
 
     private String quickProductSearch(String message) {
