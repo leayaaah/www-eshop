@@ -279,6 +279,24 @@ input[type=checkbox], input[type=radio] { width: auto; min-height: auto; }
 
 .recommendations { margin: 34px 0; }
 .recommendations h2 { margin-top: 0; }
+.recommendations-list {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 4px 4px 16px;
+    scroll-snap-type: x proximity;
+    scrollbar-color: var(--border-strong) transparent;
+}
+.recommendations-list .card {
+    flex: 0 0 248px;
+    scroll-snap-align: start;
+}
+.recommendations-list .card img { aspect-ratio: 4 / 3; }
+.recommendations-list::-webkit-scrollbar { height: 8px; }
+.recommendations-list::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 9999px;
+}
 
 .form {
     display: grid;
@@ -350,6 +368,7 @@ td:first-child { color: var(--text); font-weight: 500; }
     .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .filters { grid-template-columns: 1fr; }
     .detail { grid-template-columns: 1fr; gap: 24px; padding: 16px; }
+    .recommendations-list .card { flex-basis: 220px; }
     .hero { padding: 24px; }
     .hero h1 { font-size: 28px; line-height: 36px; }
     table { display: block; overflow-x: auto; white-space: nowrap; }

@@ -18,7 +18,6 @@
     <a th:href="@{/}">
      Cửa hàng
     </a>
-    <div th:replace="~{fragments/recommend :: products('Sản phẩm tương tự', ${similar})}"></div>
     <a th:href="@{/cart}">
      Giỏ hàng (
      <span th:text="${cartCount} ?: 0">
@@ -84,6 +83,7 @@
      </a>
     </div>
    </div>
+   <div th:replace="~{fragments/recommend :: products('Sản phẩm tương tự', ${similar})}"></div>
   </main>
   <footer>
    IUH eShop · Spring Boot · MariaDB
