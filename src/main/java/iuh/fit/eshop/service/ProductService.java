@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.context.ApplicationEventPublisher;
 import iuh.fit.eshop.ai.ProductChangedEvent;
+import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ProductService  {
@@ -20,6 +21,9 @@ public class ProductService  {
     }
     public Product findById(Long id) {
         return products.findDetailedById(id).orElseThrow(()->new NotFoundException("Không tìm thấy sản phẩm #"+id));
+    }
+    public List<Product> findAllWithCategory() {
+        return products.findAllWithCategory();
     }
 @PreAuthorize("hasRole('SELLER')")
 public Product save(Product p,Long categoryId) {

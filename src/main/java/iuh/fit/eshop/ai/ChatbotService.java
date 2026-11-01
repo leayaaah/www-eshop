@@ -11,6 +11,8 @@ import iuh.fit.eshop.service.ProductService;
 
 import java.util.Set;
 import java.util.List;
+import java.util.Arrays;
+import java.util.Comparator;
 
 @Service
 @RequiredArgsConstructor
@@ -54,12 +56,21 @@ public class ChatbotService {
         Set<String> stopWords = Set.of("tôi", "mình", "muốn", "cần", "mua", "tìm", "cho", "xem",
                 "sản", "phẩm", "một", "vài", "loại", "có", "gì", "nào", "giúp", "với", "giá",
                 "bao", "nhiêu", "không", "xin", "hãy", "tư", "vấn", "chào", "hello", "hi");
-        String keyword = java.util.Arrays.stream(query.split(" "))
+        String keyword = Arrays.stream(query.split(" "))
                 .filter(word -> !stopWords.contains(word))
                 .reduce((a, b) -> a + " " + b).orElse("");
         if (keyword.isBlank()) return null;
 
-        List<Product> products = productService.search(keyword, null, 0, 5).getContent();
+        List<String> tokens = Arrays.stream(keyword.split(" "))
+                .filter(token -> token.length() > 1)
+                .toList();
+        List<Product> allProducts = productService.findAllWithCategory();
+        List<Product> products = allProducts.stream()
+                .filter(product -> containsAllTokens(product, tokens))
+                .sorted(Comparator.comparingInt((Product product) -> matchScore(product, tokens)).reversed()
+                        .thenComparing(Product::getId))
+                .limit(5)
+                .toList();
         if (products.isEmpty()) {
             return "Mình chưa tìm thấy sản phẩm phù hợp với \"" + keyword
                     + "\". Bạn có thể thử từ khóa khác như điện thoại, laptop hoặc tai nghe.";
@@ -68,5 +79,24 @@ public class ChatbotService {
                 products.stream()
                         .map(p -> p.getName() + " - " + p.getPrice() + " đồng (/products/" + p.getId() + ")")
                         .reduce((a, b) -> a + "; " + b).orElse("");
+    }
+
+    private boolean containsAllTokens(Product product, List<String> tokens) {
+        String searchable = searchableText(product);
+        return tokens.stream().allMatch(searchable::contains);
+    }
+
+    private int matchScore(Product product, List<String> tokens) {
+        String name = product.getName().toLowerCase(java.util.Locale.ROOT);
+        String category = product.getCategory().getName().toLowerCase(java.util.Locale.ROOT);
+        return (int) tokens.stream().mapToInt(token ->
+                (name.contains(token) ? 3 : 0) + (category.contains(token) ? 2 : 0)).sum();
+    }
+
+    private String searchableText(Product product) {
+        String category = product.getCategory().getName() + " "
+                + (product.getCategory().getDescription() == null ? "" : product.getCategory().getDescription());
+        return (product.getName() + " " + product.getDescription() + " " + category)
+                .toLowerCase(java.util.Locale.ROOT);
     }
 }
