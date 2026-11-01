@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:sec="http://www.thymeleaf.org/extras/spring-security" xmlns:th="http://www.thymeleaf.org">
+ <head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <title>
+   Danh mục - eShop
+  </title>
+  <link rel="stylesheet" th:href="@{/css/style.css}"/>
+ </head>
+ <body>
+  <header>
+   <a class="brand" th:href="@{/}">
+    IUH eShop
+   </a>
+   <nav>
+    <a th:href="@{/}">
+     Cửa hàng
+    </a>
+    <a th:href="@{/cart}">
+     Giỏ hàng (
+     <span th:text="${cartCount} ?: 0">
+      0
+     </span>
+     )
+    </a>
+    <a sec:authorize="hasAuthority('ROLE_CUSTOMER')" th:href="@{/orders}">
+     Đơn hàng của tôi
+    </a>
+    <span sec:authorize="hasAuthority('ROLE_SELLER')">
+     <a th:href="@{/admin/categories}">
+      Danh mục
+     </a>
+     <a th:href="@{/admin/products}">
+      Sản phẩm
+     </a>
+     <a th:href="@{/admin/orders}">
+      Đơn hàng
+     </a>
+     <a th:href="@{/admin/users}">
+      Tài khoản
+     </a>
+    </span>
+    <a sec:authorize="isAnonymous()" th:href="@{/login}">
+     Đăng nhập
+    </a>
+    <a sec:authorize="isAnonymous()" th:href="@{/register}">
+     Đăng ký
+    </a>
+    <form class="inline" method="post" sec:authorize="isAuthenticated()" th:action="@{/logout}">
+     <button>
+      Đăng xuất
+     </button>
+    </form>
+   </nav>
+  </header>
+  <main>
+   <div class="alert" th:if="${error}" th:text="${error}">
+   </div>
+   <h1>
+    Danh mục
+   </h1>
+   <form class="form" method="post" th:action="@{/admin/categories}" th:object="${category}">
+    <input th:field="*{id}" type="hidden"/>
+    <label>
+     Tên
+     <input maxlength="100" required="" th:field="*{name}"/>
+    </label>
+    <label>
+     Mô tả
+     <textarea maxlength="255" th:field="*{description}"></textarea>
+    </label>
+    <button>
+     Lưu
+    </button>
+   </form>
+  </main>
+  <footer>
+   IUH eShop · Spring Boot · MariaDB
+  </footer>
+ </body>
+</html>

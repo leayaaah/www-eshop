@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+ <head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <title>
+   Lỗi - eShop
+  </title>
+  <link rel="stylesheet" th:href="@{/css/style.css}"/>
+ </head>
+ <body>
+  <header>
+   <a class="brand" th:href="@{/}">
+    IUH eShop
+   </a>
+   <nav>
+    <a th:href="@{/}">
+     Cửa hàng
+    </a>
+    <a th:href="@{/cart}">
+     Giỏ hàng
+    </a>
+   </nav>
+  </header>
+  <main>
+   <h1>
+    Lỗi
+    <span th:text="${status}">
+     500
+    </span>
+   </h1>
+   <p th:text="${error}">
+    Đã xảy ra lỗi.
+   </p>
+   <a class="button" th:href="@{/}">
+    Quay lại cửa hàng
+   </a>
+  </main>
+  <footer>
+   IUH eShop · Spring Boot · MariaDB
+  </footer>
+ </body>
+</html>
