@@ -235,20 +235,20 @@
     }
 
     function renderCategories(data) {
-        categories.replaceChildren();
-        const heading = document.createElement('h3');
-        heading.textContent = 'Tổng hợp theo danh mục';
-        categories.append(heading);
-        [...(data.categories || [])].sort((a, b) => b.intensity - a.intensity).forEach(category => {
-            const row = document.createElement('div');
-            row.className = 'heat-category';
-            const label = document.createElement('span');
-            label.textContent = category.category;
-            const bar = document.createElement('span');
-            bar.className = 'heat-category-bar';
-            bar.style.width = `${Math.max(3, category.intensity * 100)}%`;
-            row.append(label, bar);
-            categories.append(row);
-        });
+        // categories.replaceChildren();
+        // const heading = document.createElement('h3');
+        // heading.textContent = 'Tổng hợp theo danh mục';
+        // categories.append(heading);
+        // [...(data.categories || [])].sort((a, b) => b.intensity - a.intensity).forEach(category => {
+        //     const row = document.createElement('div');
+        //     row.className = 'heat-category';
+        //     const label = document.createElement('span');
+        //     label.textContent = category.category;
+        //     const bar = document.createElement('span');
+        //     bar.className = 'heat-category-bar';
+        //     bar.style.width = `${Math.max(3, category.intensity * 100)}%`;
+        //     row.append(label, bar);
+        //     categories.append(row);
+        // });
     }
 })();
