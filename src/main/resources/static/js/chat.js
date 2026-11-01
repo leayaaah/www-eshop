@@ -3,17 +3,26 @@
   if (!widget) return;
   var panel = widget.querySelector('#chat-panel');
   var messages = widget.querySelector('.chat-messages');
-  widget.querySelector('.chat-toggle').addEventListener('click', function () {
-    panel.hidden = !panel.hidden;
+  var toggle = widget.querySelector('.chat-toggle');
+  var close = widget.querySelector('.chat-close');
+  function setPanelOpen(open) {
+    panel.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.hidden = open;
+  }
+  toggle.addEventListener('click', function () {
+    setPanelOpen(true);
+  });
+  close.addEventListener('click', function () {
+    setPanelOpen(false);
+    toggle.focus();
   });
   widget.querySelector('.chat-form').addEventListener('submit', async function (event) {
     event.preventDefault();
     var input = event.target.message;
     var message = input.value.trim();
     if (!message) return;
-    var user = document.createElement('p');
-    user.textContent = 'Bạn: ' + message;
-    messages.appendChild(user);
+    appendMessage('user', message);
     input.value = '';
     try {
       var response = await fetch('/api/chat', {
@@ -21,13 +30,24 @@
         body: JSON.stringify({ message: message })
       });
       var data = await response.json();
-      var reply = document.createElement('p');
-      reply.textContent = 'IUH eShop: ' + (data.answer || data.error || 'Xin lỗi, có lỗi xảy ra.');
-      messages.appendChild(reply);
+      appendMessage('bot', data.answer || data.error || 'Xin lỗi, có lỗi xảy ra.');
     } catch (error) {
-      var failure = document.createElement('p');
-      failure.textContent = 'IUH eShop: Không thể kết nối chatbot.';
-      messages.appendChild(failure);
+      appendMessage('bot', 'Không thể kết nối chatbot lúc này.');
     }
+    messages.scrollTop = messages.scrollHeight;
   });
+
+  function appendMessage(type, text) {
+    var row = document.createElement('div');
+    row.className = 'chat-message chat-message-' + type;
+    var avatar = document.createElement('div');
+    avatar.className = 'chat-avatar';
+    avatar.textContent = type === 'bot' ? '✦' : 'Bạn';
+    var bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.textContent = text;
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    messages.appendChild(row);
+  }
 })();
