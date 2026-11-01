@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import iuh.fit.eshop.tracking.EventType;
+import iuh.fit.eshop.tracking.TrackingService;
 import java.math.BigDecimal;
 import java.util.List;
 @Service
@@ -16,7 +18,7 @@ public class OrderService  {
     private final OrderRepository orders;
     private final ProductRepository products;
     private final UserRepository users;
-    private final UserEventRepository userEvents;
+    private final TrackingService tracking;
 @Transactional
 @PreAuthorize("hasRole('CUSTOMER')")
 public ShopOrder checkout(Cart cart,CheckoutForm form,String username) {
@@ -44,14 +46,9 @@ public ShopOrder checkout(Cart cart,CheckoutForm form,String username) {
         }
         order.setTotalAmount(total);
         ShopOrder saved=orders.save(order);
-        // Ghi sự kiện purchase từ server (cùng transaction)
-        UserEvent ev = new UserEvent();
-        ev.setSessionId("server");
-        ev.setUsername(username);
-        ev.setEventType("purchase");
-        ev.setProductId(null);
-        ev.setPage("/checkout");
-        userEvents.save(ev);
+        for (var detail : saved.getDetails()) {
+            tracking.recordServer(username, detail.getProduct().getId(), EventType.PURCHASE);
+        }
         cart.clear();
         return saved;
     }

@@ -1,6 +1,9 @@
 package iuh.fit.eshop.controller;
 import iuh.fit.eshop.cart.Cart;
 import iuh.fit.eshop.service.ProductService;
+import iuh.fit.eshop.tracking.EventType;
+import iuh.fit.eshop.tracking.TrackingService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class CartController  {
     private final Cart cart;
     private final ProductService products;
+    private final TrackingService tracking;
 @GetMapping
 public String view(Model model)  {
         model.addAttribute("cart", cart);
@@ -22,7 +26,7 @@ public String view(Model model)  {
     }
 @PostMapping("/add/{id}")
 public String add(@PathVariable Long id,
-@RequestParam(defaultValue = "1") int quantity)  {
+@RequestParam(defaultValue = "1") int quantity, HttpServletRequest request)  {
         var product = products.findById(id);
         int requested = Math.max(1, quantity);
         var existing = cart.getItems().get(id);
@@ -32,6 +36,7 @@ public String add(@PathVariable Long id,
             throw new IllegalArgumentException("Số lượng yêu cầu vượt quá tồn kho (còn " + product.getQuantity() + ")");
         }
         cart.add(product, requested);
+        tracking.recordServer(request, id, EventType.ADD_TO_CART);
         return "redirect:/cart";
     }
 @PostMapping("/update/{id}")

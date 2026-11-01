@@ -8,11 +8,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.List;
 import java.util.Map;
 
 @Component
+@ConditionalOnProperty(name = "app.ai.enabled", havingValue = "true")
 @RequiredArgsConstructor
 public class AiIngestionRunner implements ApplicationRunner {
     private final VectorStore vectorStore;
@@ -28,8 +30,6 @@ public class AiIngestionRunner implements ApplicationRunner {
     }
 
     private void ingestProducts() {
-        vectorStore.delete("source == 'product'");
-
         List<Document> docs = products.findAllWithCategory().stream()
                 .map(p -> new Document(
                         p.getName() + ". " + p.getDescription() + " Giá " + p.getPrice() + " đồng.",
@@ -37,6 +37,14 @@ public class AiIngestionRunner implements ApplicationRunner {
                                 "productId", p.getId(),
                                 "categoryId", p.getCategory().getId())))
                 .toList();
-        vectorStore.add(docs);
+        for (Document doc : docs) {
+            Object id = doc.getMetadata().get("productId");
+            if (id == null) continue;
+            var existing = vectorStore.similaritySearch(
+                    org.springframework.ai.vectorstore.SearchRequest.builder()
+                            .query(doc.getText()).topK(1)
+                            .filterExpression("source == 'product' && productId == " + id).build());
+            if (existing.isEmpty()) vectorStore.add(List.of(doc));
+        }
     }
 }

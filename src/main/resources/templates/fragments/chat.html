@@ -1,0 +1,11 @@
+<section class="chat-widget" th:fragment="chat">
+  <button type="button" class="chat-toggle" aria-controls="chat-panel">Chat với IUH eShop</button>
+  <div id="chat-panel" hidden>
+    <div class="chat-messages" aria-live="polite"></div>
+    <form class="chat-form">
+      <input maxlength="500" name="message" placeholder="Bạn muốn tìm sản phẩm gì?" required>
+      <button>Gửi</button>
+    </form>
+  </div>
+  <script th:src="@{/js/chat.js}" defer></script>
+</section>

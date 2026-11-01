@@ -9,5 +9,8 @@ public interface OrderRepository extends JpaRepository<ShopOrder,Long>  {
     @EntityGraph(attributePaths={"details","details.product","user"})
 @Query("select distinct o from ShopOrder o where o.user.id=:userId order by o.id desc") List<ShopOrder> findForUser(@Param("userId") Long userId);
     @EntityGraph(attributePaths={"details","details.product","user"})
+    @Query("select distinct o from ShopOrder o where o.user.username=:username order by o.id desc")
+    List<ShopOrder> findForUserByUsername(@Param("username") String username);
+    @EntityGraph(attributePaths={"details","details.product","user"})
 @Query("select distinct o from ShopOrder o where o.id=:id") Optional<ShopOrder> findDetailedById(@Param("id") Long id);
 }
