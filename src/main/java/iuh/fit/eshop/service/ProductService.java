@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.context.ApplicationEventPublisher;
 import iuh.fit.eshop.ai.ProductChangedEvent;
 import java.util.List;
+import java.math.BigDecimal;
 @Service
 @RequiredArgsConstructor
 public class ProductService  {
@@ -24,6 +25,14 @@ public class ProductService  {
     }
     public List<Product> findAllWithCategory() {
         return products.findAllWithCategory();
+    }
+    public List<Product> searchProducts(String keyword, String category, BigDecimal maxPrice, int limit) {
+        return products.searchProducts(
+                        keyword == null || keyword.isBlank() ? null : keyword.trim(),
+                        category == null || category.isBlank() ? null : category.trim(),
+                        maxPrice,
+                        PageRequest.of(0, Math.min(Math.max(1, limit), 5)))
+                .getContent();
     }
 @PreAuthorize("hasRole('SELLER')")
 public Product save(Product p,Long categoryId) {

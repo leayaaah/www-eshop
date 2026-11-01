@@ -14,4 +14,18 @@ public interface ProductRepository extends JpaRepository<Product,Long>  {
     @EntityGraph(attributePaths="category")
     @Query("select p from Product p join fetch p.category")
     List<Product> findAllWithCategory();
+
+    @EntityGraph(attributePaths="category")
+    @Query("""
+            select p from Product p join fetch p.category c
+            where (:keyword is null or lower(p.name) like lower(concat('%', :keyword, '%'))
+                   or lower(p.description) like lower(concat('%', :keyword, '%')))
+              and (:category is null or :category = '' or lower(c.name) like lower(concat('%', :category, '%')))
+              and (:maxPrice is null or p.price <= :maxPrice)
+            order by p.id desc
+            """)
+    Page<Product> searchProducts(@Param("keyword") String keyword,
+                                 @Param("category") String category,
+                                 @Param("maxPrice") java.math.BigDecimal maxPrice,
+                                 Pageable pageable);
 }

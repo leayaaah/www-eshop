@@ -12,6 +12,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
@@ -19,6 +22,8 @@ import java.util.Objects;
 public class ProductVectorSearchService {
     private final ObjectProvider<VectorStore> vectorStores;
     private final ProductService products;
+    @Value("${app.ai.vector-search-timeout-ms:8000}")
+    private long timeoutMillis;
 
     public List<Product> search(String query, int limit) {
         VectorStore store = vectorStores.getIfAvailable();
@@ -28,12 +33,14 @@ public class ProductVectorSearchService {
         }
         List<Product> result;
         try {
-            result = store.similaritySearch(SearchRequest.builder()
-                            .query(query.trim())
-                            .topK(Math.max(1, Math.min(limit, 50)))
-                            .similarityThreshold(0.3)
-                            .filterExpression("source == 'product'")
-                            .build())
+            result = CompletableFuture.supplyAsync(() -> store.similaritySearch(SearchRequest.builder()
+                                    .query(query.trim())
+                                    .topK(Math.max(1, Math.min(limit, 8)))
+                                    .similarityThreshold(0.3)
+                                    .filterExpression("source == 'product'")
+                                    .build()))
+                    .orTimeout(timeoutMillis, TimeUnit.MILLISECONDS)
+                    .join()
                     .stream()
                     .map(this::productId)
                     .filter(Objects::nonNull)

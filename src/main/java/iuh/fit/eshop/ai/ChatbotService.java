@@ -13,6 +13,13 @@ import java.util.Set;
 import java.util.List;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +31,13 @@ public class ChatbotService {
     private final OrderTools orderTools;
     private final ProductVectorSearchService vectorSearch;
     private final ProductService productService;
+    @Value("${app.ai.chat-timeout-ms:25000}")
+    private long chatTimeoutMillis;
+    private static final ExecutorService CHAT_EXECUTOR = Executors.newCachedThreadPool(r -> {
+        Thread thread = new Thread(r, "chatbot-gemini");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     public String chat(String message, String conversationId) {
         String quickAnswer = quickProductSearch(message);
@@ -31,18 +45,46 @@ public class ChatbotService {
 
         ChatClient client = clients.getIfAvailable();
         if (client != null && memories.getIfAvailable() != null) {
+            Future<String> request = null;
             try {
-                String answer = client.prompt().user(message).tools(productTools, orderTools)
-                        .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
-                        .call().content();
-                return answer == null || answer.isBlank() ? "Xin lỗi, tôi chưa có câu trả lời." : answer;
-            } catch (RuntimeException ex) {
-                log.warn("Chat provider failed; using local product fallback: {}", ex.getMessage());
+                request = CHAT_EXECUTOR.submit(() -> {
+                    ToolCallBudget.start();
+                    try {
+                        return client.prompt().user(message).tools(productTools, orderTools)
+                                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
+                                .call().content();
+                    } finally {
+                        ToolCallBudget.clear();
+                    }
+                });
+                String answer = request.get(chatTimeoutMillis, TimeUnit.MILLISECONDS);
+                if (answer != null && !answer.isBlank()) return answer;
+                log.warn("Gemini returned empty content; using product fallback");
+            } catch (TimeoutException ex) {
+                if (request != null) request.cancel(true);
+                log.warn("Gemini request timed out after {} ms; using product fallback", chatTimeoutMillis);
+            } catch (InterruptedException ex) {
+                if (request != null) request.cancel(true);
+                Thread.currentThread().interrupt();
+                log.warn("Gemini request interrupted; using product fallback");
+            } catch (ExecutionException ex) {
+                Throwable cause = ex.getCause() == null ? ex : ex.getCause();
+                if (cause instanceof ToolCallBudget.ToolCallLimitExceededException) {
+                    log.warn("Gemini exceeded the {}-tool-call request budget; using product fallback", ToolCallBudget.MAX_CALLS);
+                } else {
+                    log.warn("Gemini API failed; using product fallback: {}", cause.getMessage());
+                }
             }
+        } else {
+            log.warn("Gemini ChatClient or ChatMemory is unavailable; using product fallback");
         }
+        return productFallback(message);
+    }
+
+    private String productFallback(String message) {
         List<Product> products = vectorSearch.search(message, 5);
-        if (products.isEmpty()) return "Chatbot AI hiện chưa được cấu hình. Bạn có thể tìm sản phẩm bằng từ khóa trên cửa hàng.";
-        return "Chatbot AI hiện chưa được cấu hình. Bạn có thể tham khảo: " +
+        if (products.isEmpty()) return "Tôi chưa tìm thấy sản phẩm phù hợp. Bạn có thể thử thêm từ khóa hoặc danh mục.";
+        return "Tôi chưa thể hoàn tất câu trả lời AI lúc này. Bạn có thể tham khảo: " +
                 products.stream().map(p -> p.getName() + " (/products/" + p.getId() + ")")
                         .reduce((a, b) -> a + ", " + b).orElse("");
     }
