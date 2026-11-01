@@ -1,241 +1,141 @@
 package iuh.fit.eshop.ai;
 
 import iuh.fit.eshop.entity.Product;
-import lombok.RequiredArgsConstructor;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Service;
-import lombok.extern.slf4j.Slf4j;
+import iuh.fit.eshop.entity.ShopOrder;
+import iuh.fit.eshop.service.OrderService;
 import iuh.fit.eshop.service.ProductService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
-import java.util.Set;
-import java.util.List;
+import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.math.BigDecimal;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.time.Duration;
-import reactor.core.publisher.Flux;
-import org.springframework.beans.factory.annotation.Value;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ChatbotService {
-    private final ObjectProvider<ChatClient> clients;
-    private final ObjectProvider<ChatMemory> memories;
-    private final ProductTools productTools;
-    private final OrderTools orderTools;
-    private final ProductVectorSearchService vectorSearch;
+    private static final Set<String> STOP_WORDS = Set.of(
+            "toi", "minh", "muon", "can", "mua", "tim", "cho", "xem", "san", "pham",
+            "một", "vài", "loại", "có", "gì", "nào", "giúp", "với", "giá", "bao",
+            "nhieu", "khong", "xin", "hay", "tu", "van", "chiec", "dang", "uu", "tien",
+            "mot", "vai", "loai", "co", "gi", "nao", "giup", "voi", "gia", "nhan");
+    private static final Pattern MILLION_PRICE = Pattern.compile(
+            "(?:toi da|duoi|khoang|ngan sach)\\s*(?:la|tam)?\\s*(\\d+(?:[.,]\\d+)?)\\s*(?:trieu|tr)");
+
     private final ProductService productService;
-    @Value("${app.ai.chat-timeout-ms:25000}")
-    private long chatTimeoutMillis;
-    private static final ExecutorService CHAT_EXECUTOR = Executors.newCachedThreadPool(r -> {
-        Thread thread = new Thread(r, "chatbot-gemini");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final OrderService orderService;
 
     public String chat(String message, String conversationId) {
-        long requestStartedAt = System.nanoTime();
-        String quickAnswer = quickProductSearch(message);
-        if (quickAnswer != null) {
-            log.info("Chat request stage=quick-search durationMs={}", elapsedMs(requestStartedAt));
-            return quickAnswer;
+        long startedAt = System.nanoTime();
+        String normalized = normalize(message);
+        String answer = orderAnswer(normalized);
+        if (answer == null) answer = policyAnswer(normalized);
+        if (answer == null) answer = productAnswer(normalized);
+        if (answer == null) {
+            answer = "Mình có thể hỗ trợ tìm sản phẩm, tư vấn giá/danh mục hoặc xem đơn hàng của bạn.";
         }
-
-        String localProductAnswer = localSemanticProductSearch(message);
-        if (localProductAnswer != null) {
-            log.info("Chat request stage=local-semantic-search durationMs={}", elapsedMs(requestStartedAt));
-            return localProductAnswer;
-        }
-
-        ChatClient client = clients.getIfAvailable();
-        if (client != null && memories.getIfAvailable() != null) {
-            Future<String> request = null;
-            try {
-                request = CHAT_EXECUTOR.submit(() -> {
-                    ToolCallBudget.start();
-                    try {
-                        return client.prompt().user(message).tools(productTools, orderTools)
-                                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
-                                .call().content();
-                    } finally {
-                        ToolCallBudget.clear();
-                    }
-                });
-                String answer = request.get(chatTimeoutMillis, TimeUnit.MILLISECONDS);
-                if (answer != null && !answer.isBlank()) {
-                    log.info("Chat request stage=gemini durationMs={} result=content",
-                            elapsedMs(requestStartedAt));
-                    return answer;
-                }
-                log.warn("Chat request stage=gemini durationMs={} result=empty; using product fallback",
-                        elapsedMs(requestStartedAt));
-            } catch (TimeoutException ex) {
-                if (request != null) request.cancel(true);
-                log.warn("Chat request stage=gemini durationMs={} result=timeout limitMs={}; using product fallback",
-                        elapsedMs(requestStartedAt), chatTimeoutMillis);
-            } catch (InterruptedException ex) {
-                if (request != null) request.cancel(true);
-                Thread.currentThread().interrupt();
-                log.warn("Chat request stage=gemini durationMs={} result=interrupted; using product fallback",
-                        elapsedMs(requestStartedAt));
-            } catch (ExecutionException ex) {
-                Throwable cause = ex.getCause() == null ? ex : ex.getCause();
-                if (cause instanceof ToolCallBudget.ToolCallLimitExceededException) {
-                    log.warn("Chat request stage=gemini durationMs={} result=tool-limit maxCalls={}; using product fallback",
-                            elapsedMs(requestStartedAt), ToolCallBudget.MAX_CALLS);
-                } else {
-                    log.warn("Chat request stage=gemini durationMs={} result=error reason={}; using product fallback",
-                            elapsedMs(requestStartedAt), cause.getMessage());
-                }
-            }
-        } else {
-            log.warn("Gemini ChatClient or ChatMemory is unavailable; using product fallback");
-        }
-        String fallback = productFallback(message);
-        log.info("Chat request stage=fallback-complete durationMs={}", elapsedMs(requestStartedAt));
-        return fallback;
+        log.info("Chat request stage=local-sql durationMs={} conversationIdPresent={}",
+                elapsedMs(startedAt), conversationId != null && !conversationId.isBlank());
+        return answer;
     }
 
     public Flux<String> stream(String message, String conversationId) {
-        String quickAnswer = quickProductSearch(message);
-        if (quickAnswer != null) return Flux.just(quickAnswer);
-        String localProductAnswer = localSemanticProductSearch(message);
-        if (localProductAnswer != null) return Flux.just(localProductAnswer);
+        return Flux.just(chat(message, conversationId));
+    }
 
-        ChatClient client = clients.getIfAvailable();
-        if (client == null || memories.getIfAvailable() == null) {
-            return Flux.just(productFallback(message));
+    private String orderAnswer(String message) {
+        if (!containsAny(message, "don hang", "don cua toi", "trang thai don", "ma don")) return null;
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
+            return "Bạn cần đăng nhập để xem đơn hàng của mình.";
         }
-
-        return Flux.defer(() -> {
-                    ToolCallBudget.start();
-                    return client.prompt().user(message).tools(productTools, orderTools)
-                            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
-                            .stream().content()
-                            .filter(chunk -> chunk != null && !chunk.isBlank())
-                            .doFinally(signal -> ToolCallBudget.clear());
-                })
-                .timeout(Duration.ofMillis(chatTimeoutMillis),
-                        Flux.defer(() -> Flux.just(productFallback(message))))
-                .onErrorResume(ex -> {
-                    log.warn("Chat stream failed; using fallback: {}", ex.getMessage());
-                    return Flux.just(productFallback(message));
-                });
+        List<ShopOrder> orders = orderService.mine(authentication.getName());
+        if (orders.isEmpty()) return "Bạn chưa có đơn hàng nào.";
+        return "Các đơn hàng gần đây: " + orders.stream().limit(5)
+                .map(order -> "#" + order.getId() + " - " + order.getStatus().name()
+                        + " - " + order.getTotalAmount() + " đồng")
+                .reduce((first, second) -> first + "; " + second).orElse("");
     }
 
-    private String productFallback(String message) {
-        List<Product> products = vectorSearch.search(message, 5);
-        if (products.isEmpty()) return "Tôi chưa tìm thấy sản phẩm phù hợp. Bạn có thể thử thêm từ khóa hoặc danh mục.";
-        return "Tôi chưa thể hoàn tất câu trả lời AI lúc này. Bạn có thể tham khảo: " +
-                products.stream().map(p -> p.getName() + " (/products/" + p.getId() + ")")
-                        .reduce((a, b) -> a + ", " + b).orElse("");
-    }
-
-    private String localSemanticProductSearch(String message) {
-        if (message == null) return null;
-        String normalized = message.toLowerCase(Locale.ROOT);
-        if (!containsProductIntent(normalized)) return null;
-
-        BigDecimal maxPrice = extractMaxPrice(normalized);
-        String category = normalized.contains("laptop") ? "laptop" : null;
-        List<Product> products = vectorSearch.search(message, 8).stream()
-                .filter(product -> maxPrice == null || product.getPrice().compareTo(maxPrice) <= 0)
-                .filter(product -> category == null
-                        || product.getCategory().getName().toLowerCase(Locale.ROOT).contains(category))
-                .limit(5)
-                .toList();
-        if (products.isEmpty()) return null;
-
-        return "Mình tìm thấy " + products.size() + " sản phẩm phù hợp: " +
-                products.stream()
-                        .map(p -> p.getName() + " - " + p.getPrice() + " đồng (/products/" + p.getId() + ")")
-                        .reduce((a, b) -> a + "; " + b).orElse("");
-    }
-
-    private boolean containsProductIntent(String message) {
-        return message.contains("laptop") || message.contains("máy tính")
-                || message.contains("điện thoại") || message.contains("tai nghe")
-                || message.contains("mua") || message.contains("tư vấn");
-    }
-
-    private BigDecimal extractMaxPrice(String message) {
-        Matcher million = Pattern.compile("(?:tối đa|dưới|khoảng|ngân sách)\\s*(?:là|tầm)?\\s*(\\d+(?:[.,]\\d+)?)\\s*(?:triệu|tr)").matcher(message);
-        if (million.find()) {
-            return BigDecimal.valueOf(Double.parseDouble(million.group(1).replace(',', '.')))
-                    .multiply(BigDecimal.valueOf(1_000_000));
-        }
-        Matcher exact = Pattern.compile("(?:tối đa|dưới|khoảng|ngân sách)\\s*(?:là|tầm)?\\s*([\\d.,]+)\\s*(?:đ|đồng|vnd)?").matcher(message);
-        if (exact.find()) {
-            String value = exact.group(1).replace(".", "").replace(",", "");
-            return new BigDecimal(value);
+    private String policyAnswer(String message) {
+        if (containsAny(message, "doi tra", "doi hang", "hoan tien", "bao hanh", "chinh sach")) {
+            return "Thông tin chính sách chưa được nạp vào chatbot local. Bạn vui lòng xem mục Chính sách trên website hoặc liên hệ cửa hàng để được xác nhận chính xác.";
         }
         return null;
     }
 
-    private long elapsedMs(long startedAt) {
-        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
-    }
+    private String productAnswer(String normalized) {
+        if (!containsAny(normalized, "laptop", "may tinh", "dien thoai", "tai nghe",
+                "mua", "tim", "tu van", "san pham", "gia")) return null;
 
-    private String quickProductSearch(String message) {
-        if (message == null || message.length() > 100) return null;
-        String query = message.toLowerCase(java.util.Locale.ROOT)
-                .replaceAll("[^\\p{L}\\p{N}\\s]", " ")
-                .replaceAll("\\s+", " ")
-                .trim();
-        if (!containsProductIntent(query)) return null;
-        Set<String> stopWords = Set.of("tôi", "mình", "muốn", "cần", "mua", "tìm", "cho", "xem",
-                "sản", "phẩm", "một", "vài", "loại", "có", "gì", "nào", "giúp", "với", "giá",
-                "bao", "nhiêu", "không", "xin", "hãy", "tư", "vấn", "chào", "hello", "hi");
-        String keyword = Arrays.stream(query.split(" "))
-                .filter(word -> !stopWords.contains(word))
-                .reduce((a, b) -> a + " " + b).orElse("");
-        if (keyword.isBlank()) return null;
-
+        BigDecimal maxPrice = extractMaxPrice(normalized);
+        String keyword = Arrays.stream(normalized.split(" "))
+                .filter(token -> token.length() > 1 && !STOP_WORDS.contains(token))
+                .reduce((first, second) -> first + " " + second).orElse("");
         List<String> tokens = Arrays.stream(keyword.split(" "))
                 .filter(token -> token.length() > 1)
                 .toList();
-        List<Product> allProducts = productService.findAllWithCategory();
-        List<Product> products = allProducts.stream()
-                .filter(product -> containsAllTokens(product, tokens))
-                .sorted(Comparator.comparingInt((Product product) -> matchScore(product, tokens)).reversed()
-                        .thenComparing(Product::getId))
+        List<Product> products = productService.findAllWithCategory().stream()
+                .filter(product -> maxPrice == null || product.getPrice().compareTo(maxPrice) <= 0)
+                .filter(product -> tokens.isEmpty() || tokens.stream().anyMatch(token -> searchable(product).contains(token)))
+                .sorted(Comparator.comparingInt((Product product) -> score(product, tokens))
+                        .reversed().thenComparing(Product::getId))
                 .limit(5)
                 .toList();
-        if (products.isEmpty()) return null;
-        return "Mình tìm thấy " + products.size() + " sản phẩm phù hợp: " +
-                products.stream()
-                        .map(p -> p.getName() + " - " + p.getPrice() + " đồng (/products/" + p.getId() + ")")
-                        .reduce((a, b) -> a + "; " + b).orElse("");
+        if (products.isEmpty()) return "Mình chưa tìm thấy sản phẩm phù hợp trong dữ liệu cửa hàng.";
+        return "Mình tìm thấy " + products.size() + " sản phẩm phù hợp: " + products.stream()
+                .map(product -> product.getName() + " - " + product.getPrice()
+                        + " đồng (/products/" + product.getId() + ")")
+                .reduce((first, second) -> first + "; " + second).orElse("");
     }
 
-    private boolean containsAllTokens(Product product, List<String> tokens) {
-        String searchable = searchableText(product);
-        return tokens.stream().allMatch(searchable::contains);
+    private String searchable(Product product) {
+        return normalize(product.getName() + " " + product.getDescription() + " "
+                + product.getCategory().getName() + " " + product.getCategory().getDescription());
     }
 
-    private int matchScore(Product product, List<String> tokens) {
-        String name = product.getName().toLowerCase(java.util.Locale.ROOT);
-        String category = product.getCategory().getName().toLowerCase(java.util.Locale.ROOT);
-        return (int) tokens.stream().mapToInt(token ->
-                (name.contains(token) ? 3 : 0) + (category.contains(token) ? 2 : 0)).sum();
+    private int score(Product product, List<String> tokens) {
+        String name = normalize(product.getName());
+        String category = normalize(product.getCategory().getName());
+        return tokens.stream().mapToInt(token ->
+                (name.contains(token) ? 4 : 0) + (category.contains(token) ? 2 : 0)).sum();
     }
 
-    private String searchableText(Product product) {
-        String category = product.getCategory().getName() + " "
-                + (product.getCategory().getDescription() == null ? "" : product.getCategory().getDescription());
-        return (product.getName() + " " + product.getDescription() + " " + category)
-                .toLowerCase(java.util.Locale.ROOT);
+    private BigDecimal extractMaxPrice(String message) {
+        Matcher matcher = MILLION_PRICE.matcher(message);
+        if (!matcher.find()) return null;
+        return new BigDecimal(matcher.group(1).replace(',', '.')).multiply(BigDecimal.valueOf(1_000_000));
+    }
+
+    private boolean containsAny(String message, String... values) {
+        return Arrays.stream(values).anyMatch(message::contains);
+    }
+
+    private String normalize(String value) {
+        if (value == null) return "";
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replace('đ', 'd')
+                .replace('Đ', 'D')
+                .toLowerCase(Locale.ROOT)
+                .replaceAll("[^\\p{L}\\p{N}\\s]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private long elapsedMs(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000;
     }
 }

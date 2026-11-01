@@ -6,158 +6,75 @@ import iuh.fit.eshop.service.OrderService;
 import iuh.fit.eshop.service.ProductService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Consumer;
-import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.*;
 
 class ChatbotReliabilityTests {
-
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
-        ToolCallBudget.clear();
     }
 
     @Test
-    void capsToolCallsAtTwoPerRequest() {
-        ToolCallBudget.start();
-        ToolCallBudget.consume("searchProducts");
-        ToolCallBudget.consume("getProductDetail");
-
-        assertThrows(ToolCallBudget.ToolCallLimitExceededException.class,
-                () -> ToolCallBudget.consume("getRecommendedProducts"));
-    }
-
-    @Test
-    void unifiedProductSearchUsesVectorOnceAndDoesNotExposeSimilarTool() {
-        ProductVectorSearchService vector = mock(ProductVectorSearchService.class);
+    void productAdviceUsesSqlWithoutVectorOrGemini() {
         ProductService products = mock(ProductService.class);
-        RecommendationService recommendations = mock(RecommendationService.class);
-        Product product = product(1L);
-        when(vector.search(anyString(), eq(8))).thenReturn(List.of(product));
-        ProductTools tools = new ProductTools(products, vector, recommendations);
+        Product laptop = product(1L);
+        when(products.findAllWithCategory()).thenReturn(List.of(laptop));
+        ChatbotService chatbot = new ChatbotService(products, mock(OrderService.class));
 
-        List<ProductTools.ProductInfo> result = tools.searchProducts(
-                "laptop học tập nhẹ pin tốt", "Laptop", BigDecimal.valueOf(20_000_000), true);
+        String answer = chatbot.chat(
+                "Tôi cần laptop học tập, RAM từ 16GB, ngân sách tối đa 20 triệu",
+                "conversation-1");
 
-        assertEquals(1, result.size());
-        verify(vector).search("laptop học tập nhẹ pin tốt", 8);
-        verifyNoMoreInteractions(vector);
-        assertTrue(java.util.Arrays.stream(ProductTools.class.getDeclaredMethods())
-                .filter(method -> method.getName().equals("findSimilarProducts"))
-                .noneMatch(method -> method.isAnnotationPresent(Tool.class)));
+        assertTrue(answer.contains("/products/1"));
+        verify(products).findAllWithCategory();
     }
 
     @Test
-    void vectorSearchUsesVectorStoreAndReturnsAtMostRequestedResults() {
-        VectorStore store = mock(VectorStore.class);
-        ObjectProvider<VectorStore> stores = provider(store);
-        ProductService products = mock(ProductService.class);
-        Product product = product(7L);
-        when(store.similaritySearch(any(SearchRequest.class))).thenReturn(List.of(
-                new Document("laptop", Map.of("source", "product", "productId", 7L))));
-        when(products.findById(7L)).thenReturn(product);
-        ProductVectorSearchService service = new ProductVectorSearchService(stores, products);
-        ReflectionTestUtils.setField(service, "timeoutMillis", 1000L);
+    void policyQuestionReturnsExplicitLocalModeMessage() {
+        ChatbotService chatbot = new ChatbotService(mock(ProductService.class), mock(OrderService.class));
 
-        assertEquals(List.of(product), service.search("laptop học tập", 5));
-        verify(store).similaritySearch(any(SearchRequest.class));
-        verify(products, never()).search(any(), any(), anyInt(), anyInt());
+        assertTrue(chatbot.chat("Cửa hàng có chính sách đổi trả không?", "conversation-1")
+                .contains("chưa được nạp"));
     }
 
     @Test
-    void unauthenticatedOrderToolDoesNotReadAnotherUsersOrders() {
+    void unauthenticatedOrderQuestionDoesNotReadOrders() {
         OrderService orders = mock(OrderService.class);
-        OrderTools tools = new OrderTools(orders);
+        ChatbotService chatbot = new ChatbotService(mock(ProductService.class), orders);
 
-        assertEquals("Bạn cần đăng nhập.", tools.getMyRecentOrders());
+        assertTrue(chatbot.chat("Hãy xem đơn hàng gần đây của tôi", "conversation-1")
+                .contains("cần đăng nhập"));
         verifyNoInteractions(orders);
     }
 
     @Test
-    void geminiTimeoutReturnsProductFallback() throws Exception {
-        ChatClient client = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec request = mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.CallResponseSpec response = mock(ChatClient.CallResponseSpec.class);
-        when(client.prompt()).thenReturn(request);
-        when(request.user(anyString())).thenReturn(request);
-        when(request.tools(any(Object[].class))).thenReturn(request);
-        when(request.advisors(any(Consumer.class))).thenReturn(request);
-        when(request.call()).thenAnswer(invocation -> {
-            TimeUnit.SECONDS.sleep(2);
-            return response;
-        });
+    void authenticatedOrderQuestionReadsOnlyCurrentUserOrders() {
+        OrderService orders = mock(OrderService.class);
+        when(orders.mine("alice")).thenReturn(List.of());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("alice", "password", List.of()));
+        ChatbotService chatbot = new ChatbotService(mock(ProductService.class), orders);
 
-        ObjectProvider<ChatClient> clients = provider(client);
-        ObjectProvider<ChatMemory> memories = provider(mock(ChatMemory.class));
-        ProductVectorSearchService vector = mock(ProductVectorSearchService.class);
-        ProductService products = mock(ProductService.class);
-        when(vector.search(anyString(), eq(5))).thenReturn(List.of(product(9L)));
-        ChatbotService service = new ChatbotService(clients, memories, mock(ProductTools.class),
-                mock(OrderTools.class), vector, products);
-        ReflectionTestUtils.setField(service, "chatTimeoutMillis", 50L);
-
-        String message = "Tôi cần laptop học tập và lập trình, RAM từ 16GB, nhẹ, pin tốt, ngân sách tối đa 20 triệu đồng, ưu tiên máy bền và chạy mượt";
-        String answer = service.chat(message, "conversation-1");
-
-        assertTrue(answer.contains("/products/9"));
-        verify(vector).search(message, 5);
+        assertTrue(chatbot.chat("Trạng thái đơn hàng của tôi?", "conversation-1")
+                .contains("chưa có đơn"));
+        verify(orders).mine("alice");
     }
 
     @Test
-    void longProductAdviceUsesOneLocalVectorSearchBeforeGemini() {
-        ChatClient client = mock(ChatClient.class);
-        ProductVectorSearchService vector = mock(ProductVectorSearchService.class);
+    void streamReturnsLocalAnswerImmediately() {
         ProductService products = mock(ProductService.class);
-        Product laptop = product(11L);
-        when(vector.search(anyString(), eq(8))).thenReturn(List.of(laptop));
-        ChatbotService service = new ChatbotService(provider(client), provider(mock(ChatMemory.class)),
-                mock(ProductTools.class), mock(OrderTools.class), vector, products);
+        when(products.findAllWithCategory()).thenReturn(List.of(product(2L)));
+        ChatbotService chatbot = new ChatbotService(products, mock(OrderService.class));
 
-        String answer = service.chat(
-                "Tôi đang cần tư vấn một chiếc laptop học tập và lập trình, ưu tiên nhẹ, pin tốt, RAM từ 16GB, ngân sách tối đa khoảng 20 triệu đồng",
-                "conversation-1");
-
-        assertTrue(answer.contains("/products/11"));
-        verify(vector).search(anyString(), eq(8));
-        verifyNoInteractions(client);
-    }
-
-    @Test
-    void policyQuestionIsNotAnsweredByProductQuickSearch() {
-        ChatClient client = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec request = mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.CallResponseSpec response = mock(ChatClient.CallResponseSpec.class);
-        when(client.prompt()).thenReturn(request);
-        when(request.user(anyString())).thenReturn(request);
-        when(request.tools(any(Object[].class))).thenReturn(request);
-        when(request.advisors(any(Consumer.class))).thenReturn(request);
-        when(request.call()).thenReturn(response);
-        when(response.content()).thenReturn("Chính sách đổi trả của cửa hàng là...");
-
-        ChatbotService service = new ChatbotService(provider(client), provider(mock(ChatMemory.class)),
-                mock(ProductTools.class), mock(OrderTools.class), mock(ProductVectorSearchService.class),
-                mock(ProductService.class));
-        ReflectionTestUtils.setField(service, "chatTimeoutMillis", 25_000L);
-
-        assertEquals("Chính sách đổi trả của cửa hàng là...",
-                service.chat("Cửa hàng có chính sách đổi trả như thế nào?", "conversation-1"));
-        verify(client).prompt();
+        assertTrue(chatbot.stream("Tìm laptop", "conversation-1")
+                .blockFirst().contains("/products/2"));
     }
 
     private static Product product(Long id) {
@@ -166,17 +83,10 @@ class ChatbotReliabilityTests {
         Product product = new Product();
         product.setId(id);
         product.setName("Laptop học tập");
-        product.setDescription("Nhẹ, pin tốt");
+        product.setDescription("Nhẹ, pin tốt, RAM 16GB");
         product.setPrice(BigDecimal.valueOf(15_000_000));
         product.setQuantity(5);
         product.setCategory(category);
         return product;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T> ObjectProvider<T> provider(T value) {
-        ObjectProvider<T> provider = mock(ObjectProvider.class);
-        when(provider.getIfAvailable()).thenReturn(value);
-        return provider;
     }
 }
