@@ -3,7 +3,6 @@ package iuh.fit.eshop.tracking;
 import iuh.fit.eshop.entity.UserEvent;
 import iuh.fit.eshop.repository.ProductRepository;
 import iuh.fit.eshop.repository.UserEventRepository;
-import iuh.fit.eshop.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +18,6 @@ import java.time.LocalDateTime;
 public class TrackingService {
     private final UserEventRepository events;
     private final ProductRepository products;
-    private final UserRepository users;
 
     public void record(HttpServletRequest request, Long productId, EventType type, Integer valueMs) {
         if (!products.existsById(productId)) {
@@ -49,9 +47,6 @@ public class TrackingService {
             var event = new UserEvent();
             event.setSessionId(sessionId);
             event.setUsername(username);
-            if (username != null) {
-                users.findByUsername(username).ifPresent(user -> event.setUserId(user.getId()));
-            }
             event.setProductId(productId);
             event.setEventType(type.name());
             event.setValueMs(valueMs);

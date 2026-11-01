@@ -46,12 +46,14 @@ public interface UserEventRepository extends JpaRepository<UserEvent, Long> {
     @Query(value = """
             select e.product_id, e.event_type, date(e.created_at_v2), count(*)
             from user_event e
-            left join users u on u.id = e.user_id
             where e.created_at_v2 >= :since
               and e.product_id is not null
               and e.event_type in ('VIEW', 'CLICK', 'DWELL', 'ADD_TO_CART')
               and (e.session_id is null or e.session_id <> 'server')
-              and (e.user_id is null or u.role <> 'ROLE_SELLER')
+              and not exists (
+                  select 1 from users u
+                  where u.username = e.username and u.role = 'ROLE_SELLER'
+              )
             group by e.product_id, e.event_type, date(e.created_at_v2)
             """, nativeQuery = true)
     List<Object[]> aggregateForHeat(@Param("since") LocalDateTime since);

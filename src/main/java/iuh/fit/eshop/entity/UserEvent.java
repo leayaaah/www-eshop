@@ -20,9 +20,6 @@ public class UserEvent {
 
     private String username;
 
-    @Column(name = "user_id")
-    private Long userId;
-
     @Column(name = "event_type")
     private String eventType;
 
