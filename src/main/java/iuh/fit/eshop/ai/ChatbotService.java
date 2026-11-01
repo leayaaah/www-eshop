@@ -44,10 +44,17 @@ public class ChatbotService {
     });
 
     public String chat(String message, String conversationId) {
+        long requestStartedAt = System.nanoTime();
         String quickAnswer = quickProductSearch(message);
-        if (quickAnswer != null) return quickAnswer;
+        if (quickAnswer != null) {
+            log.info("Chat request stage=quick-search durationMs={}", elapsedMs(requestStartedAt));
+            return quickAnswer;
+        }
         String localProductAnswer = localSemanticProductSearch(message);
-        if (localProductAnswer != null) return localProductAnswer;
+        if (localProductAnswer != null) {
+            log.info("Chat request stage=local-semantic-search durationMs={}", elapsedMs(requestStartedAt));
+            return localProductAnswer;
+        }
 
         ChatClient client = clients.getIfAvailable();
         if (client != null && memories.getIfAvailable() != null) {
@@ -64,27 +71,38 @@ public class ChatbotService {
                     }
                 });
                 String answer = request.get(chatTimeoutMillis, TimeUnit.MILLISECONDS);
-                if (answer != null && !answer.isBlank()) return answer;
-                log.warn("Gemini returned empty content; using product fallback");
+                if (answer != null && !answer.isBlank()) {
+                    log.info("Chat request stage=gemini durationMs={} result=content",
+                            elapsedMs(requestStartedAt));
+                    return answer;
+                }
+                log.warn("Chat request stage=gemini durationMs={} result=empty; using product fallback",
+                        elapsedMs(requestStartedAt));
             } catch (TimeoutException ex) {
                 if (request != null) request.cancel(true);
-                log.warn("Gemini request timed out after {} ms; using product fallback", chatTimeoutMillis);
+                log.warn("Chat request stage=gemini durationMs={} result=timeout limitMs={}; using product fallback",
+                        elapsedMs(requestStartedAt), chatTimeoutMillis);
             } catch (InterruptedException ex) {
                 if (request != null) request.cancel(true);
                 Thread.currentThread().interrupt();
-                log.warn("Gemini request interrupted; using product fallback");
+                log.warn("Chat request stage=gemini durationMs={} result=interrupted; using product fallback",
+                        elapsedMs(requestStartedAt));
             } catch (ExecutionException ex) {
                 Throwable cause = ex.getCause() == null ? ex : ex.getCause();
                 if (cause instanceof ToolCallBudget.ToolCallLimitExceededException) {
-                    log.warn("Gemini exceeded the {}-tool-call request budget; using product fallback", ToolCallBudget.MAX_CALLS);
+                    log.warn("Chat request stage=gemini durationMs={} result=tool-limit maxCalls={}; using product fallback",
+                            elapsedMs(requestStartedAt), ToolCallBudget.MAX_CALLS);
                 } else {
-                    log.warn("Gemini API failed; using product fallback: {}", cause.getMessage());
+                    log.warn("Chat request stage=gemini durationMs={} result=error reason={}; using product fallback",
+                            elapsedMs(requestStartedAt), cause.getMessage());
                 }
             }
         } else {
             log.warn("Gemini ChatClient or ChatMemory is unavailable; using product fallback");
         }
-        return productFallback(message);
+        String fallback = productFallback(message);
+        log.info("Chat request stage=fallback-complete durationMs={}", elapsedMs(requestStartedAt));
+        return fallback;
     }
 
     private String productFallback(String message) {
@@ -134,6 +152,10 @@ public class ChatbotService {
             return new BigDecimal(value);
         }
         return null;
+    }
+
+    private long elapsedMs(long startedAt) {
+        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
     }
 
     private String quickProductSearch(String message) {
