@@ -43,6 +43,8 @@ public interface UserEventRepository extends JpaRepository<UserEvent, Long> {
     boolean existsBySessionIdAndProductIdAndEventTypeAndCreatedAtAfter(
             String sessionId, Long productId, String eventType, LocalDateTime since);
 
+    boolean existsByEventId(String eventId);
+
     @Query(value = """
             select e.product_id, e.event_type, date(e.created_at_v2), count(*)
             from user_event e
